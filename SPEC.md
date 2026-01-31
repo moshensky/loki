@@ -60,66 +60,56 @@ Alternative workers (same protocol):
 - **Workers are stateless** - No filesystem access needed, just URLs in, PNGs out
 - **Diffing on host** - No need to transfer reference images to workers
 
-## Installation
+## Modules
 
-```bash
-npm install -D eyediff
-```
+### CLI (npm package: `eyediff`)
 
-Requires Docker to be installed and running.
+| Module        | Responsibility                              |
+| ------------- | ------------------------------------------- |
+| `cli`         | Command parsing, entry point                |
+| `config`      | Load from package.json or eyediff.config.js |
+| `stories`     | Fetch and filter stories from Storybook     |
+| `turbosnap`   | Detect changed stories via git diff         |
+| `worker-pool` | Spawn, manage, and distribute tasks         |
+| `diff`        | Compare screenshots using dssim             |
+| `reporter`    | Output results to terminal                  |
 
-## Usage
+### Worker (Docker image)
 
-```bash
-# Run tests against live Storybook
-npx eyediff test
+| Module       | Responsibility                        |
+| ------------ | ------------------------------------- |
+| `server`     | HTTP endpoint for screenshot requests |
+| `browser`    | Chrome CDP connection and management  |
+| `screenshot` | Navigate, wait for ready, capture     |
 
-# Run tests against static build
-npx eyediff test --storybook-dir ./storybook-static
+## Dependencies
 
-# Only test stories changed since main branch
-npx eyediff test --changed-since main
+> **Note:** All external tools and dependencies listed below are examples. Final choices will be researched and selected based on the finalized specification and architecture.
 
-# Update references
-npx eyediff update
+### CLI
 
-# Approve changes
-npx eyediff approve
-```
+| Dependency    | Purpose                              |
+| ------------- | ------------------------------------ |
+| `dssim`       | Perceptual image diff (prebuilt bin) |
+| `dockerode`   | Spawn and manage Docker containers   |
+| `cosmiconfig` | Load configuration                   |
 
-The CLI automatically runs Docker with the correct mounts and networking.
+### Worker
 
-## Storybook Modes
+| Dependency                | Purpose           |
+| ------------------------- | ----------------- |
+| `chromium`                | Headless browser  |
+| `puppeteer-core` or `cri` | CDP communication |
 
-### Live Server (default)
+## Protocols
 
-```bash
-# Start Storybook, then run eyediff
-npm run storybook &
-npx eyediff test
-```
-
-Connects to `http://host.docker.internal:6006`.
-
-### Static Build
-
-```bash
-# Build Storybook, then run eyediff
-npm run build-storybook
-npx eyediff test --storybook-dir ./storybook-static
-```
-
-The directory is mounted into the container and served locally. No need for a running Storybook server.
-
-## Story Discovery
-
-Fetch stories from Storybook's `index.json` endpoint:
+### Story Discovery
 
 ```
-GET http://host.docker.internal:6006/index.json
+GET http://localhost:6006/index.json
 ```
 
-Response structure:
+Response:
 
 ```json
 {
@@ -131,80 +121,55 @@ Response structure:
       "name": "Primary",
       "title": "Example/Button",
       "tags": ["dev", "test"]
+      "importPath": "./src/components/Button.stories.tsx"
     }
   }
 }
 ```
 
-### Filtering
+Filtering:
 
-- Only entries with `type: "story"` (exclude docs)
+- Only `type: "story"` (exclude docs)
 - Skip stories with `eyediff-skip` tag
+- With `--changed-since`: match `importPath` against git diff
 
-## Worker Protocol
+### Worker Protocol
 
-Communication between CLI and workers via JSON over HTTP.
-
-### Worker API
-
-Worker exposes a simple HTTP endpoint:
+Request:
 
 ```
 POST /screenshot
 Content-Type: application/json
 
 {
-  "url": "http://host.docker.internal:6006/iframe.html?id=button--primary&viewMode=story",
-  "viewport": {
-    "width": 1366,
-    "height": 768,
-    "deviceScaleFactor": 1,
-    "mobile": false
-  }
+  "url": "<storybook iframe URL>",
+  "viewport": { "width": 1366, "height": 768, "deviceScaleFactor": 1 }
 }
 ```
 
-### Success Response
+Success:
 
 ```
-HTTP/1.1 200 OK
+HTTP 200 OK
 Content-Type: image/png
-X-Timing-Navigate: 120
-X-Timing-Render: 340
-X-Timing-Screenshot: 50
+X-Timing-Navigate: <ms>
+X-Timing-Render: <ms>
+X-Timing-Screenshot: <ms>
 
 <raw PNG bytes>
 ```
 
-### Error Response
+Error:
 
 ```
-HTTP/1.1 500 Internal Server Error
+HTTP 500 Internal Server Error
 Content-Type: text/plain
 
-Navigation timeout after 30000ms
+<error message>
 ```
 
-### CLI Usage
+### Screenshot URL Format
 
-```javascript
-const response = await fetch(`http://localhost:${port}/screenshot`, {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify(task)
-});
-
-if (!response.ok) {
-  const error = await response.text();
-  throw new Error(error);
-}
-
-const screenshot = Buffer.from(await response.arrayBuffer());
-const timing = {
-  navigate: response.headers.get('X-Timing-Navigate'),
-  render: response.headers.get('X-Timing-Render'),
-  screenshot: response.headers.get('X-Timing-Screenshot')
-};
 ```
 
 ### Worker Lifecycle
