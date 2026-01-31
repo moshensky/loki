@@ -2,7 +2,7 @@
 
 ## Overview
 
-Opinionated visual regression testing for Storybook 10+. Runs entirely in Docker for consistency and simplicity.
+Opinionated visual regression testing for Storybook 10+.
 
 ## Design Principles
 
@@ -31,29 +31,26 @@ Opinionated visual regression testing for Storybook 10+. Runs entirely in Docker
 │                      └──────────────┬─────────────────────────────────┘ │
 │                                     │                                   │
 │            ┌────────────────────────┼────────────────────────┐          │
-│            │                        │                        │          │
 │            ▼                        ▼                        ▼          │
 │  ┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐   │
 │  │ Worker 1         │    │ Worker 2         │    │ Worker N         │   │
 │  │ (Docker)         │    │ (Docker)         │    │ (Docker)         │   │
-│  │                  │    │                  │    │                  │   │
 │  │ Chrome ─► PNG    │    │ Chrome ─► PNG    │    │ Chrome ─► PNG    │   │
 │  └──────────────────┘    └──────────────────┘    └──────────────────┘   │
-│                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 
 Alternative workers (same protocol):
 ┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐
-│ AWS Lambda       │    │ Remote Service   │    │ Browserstack     │
+│ AWS Lambda       │    │ Browserstack     │    │ Local Chrome     │
 └──────────────────┘    └──────────────────┘    └──────────────────┘
 ```
 
 ### Separation of Concerns
 
-| Component | Responsibility |
-|-----------|----------------|
+| Component              | Responsibility                                         |
+| ---------------------- | ------------------------------------------------------ |
 | **CLI (orchestrator)** | Story discovery, task distribution, diffing, reporting |
-| **Worker** | Receive URL → Screenshot → Return PNG buffer |
+| **Worker**             | Receive URL → Screenshot → Return PNG buffer           |
 
 ### Why This Design
 
