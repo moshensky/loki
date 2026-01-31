@@ -181,25 +181,50 @@ Filtering:
 
 ### Worker Protocol
 
-Request:
+Two separate endpoints for web and PDF content:
+
+#### Web Screenshot
 
 ```
-POST /screenshot
+POST /screenshot/web
 Content-Type: application/json
 
 {
-  "url": "<storybook iframe URL>",
-  "viewport": { "width": 1366, "height": 768, "deviceScaleFactor": 1 }
+  "url": "http://host.docker.internal:6006/iframe.html?id=button--primary",
+  "viewport": { "width": 1366, "height": 768, },
+  "deviceScaleFactor": 1
 }
 ```
 
-Viewport fields:
-
 | Field               | Description                                    |
 | ------------------- | ---------------------------------------------- |
-| `width`             | Viewport width in CSS pixels                   |
-| `height`            | Viewport height in CSS pixels                  |
+| `url`               | Web page URL                                   |
+| `viewport.width`    | Viewport width in CSS pixels                   |
+| `viewport.height`   | Viewport height in CSS pixels                  |
 | `deviceScaleFactor` | Pixel density ratio (1 = standard, 2 = retina) |
+
+#### PDF Screenshot
+
+```
+POST /screenshot/pdf
+Content-Type: application/json
+
+{
+  "url": "http://host.docker.internal:9999/invoice.pdf",
+  "dpi": 144,
+  "pages": "all"
+}
+```
+
+| Field   | Description                                       |
+| ------- | ------------------------------------------------- |
+| `url`   | PDF URL                                           |
+| `dpi`   | Resolution (72 = low, 144 = high, default: 144)   |
+| `pages` | `"all"`, `"1"`, `"1-3"`, `"1,3,5"` (default: all) |
+
+Returns merged PNG of all requested pages (vertically stacked).
+
+#### Response (both endpoints)
 
 Success:
 
@@ -209,6 +234,7 @@ Content-Type: image/png
 X-Timing-Navigate: <ms>
 X-Timing-Render: <ms>
 X-Timing-Screenshot: <ms>
+X-Pages: <count>
 
 <raw PNG bytes>
 ```
@@ -724,6 +750,7 @@ POST http://localhost:3001/diff { reference, current } → { score, diff }
 ```
 
 Potential consumers:
+
 - **eyediff** - Storybook visual regression
 - **pdf-visual-diff** - PDF visual regression
 - **Other tools** - Any image comparison needing cross-platform consistency
@@ -796,14 +823,16 @@ eyediff service start
 
 ### Service API
 
-| Endpoint | Method | Input | Description |
-|----------|--------|-------|-------------|
-| `/health` | GET | - | Health check |
-| `/compare` | POST | `{ name, pdf?, url? }` | Render + compare against reference |
-| `/update` | POST | `{ name, pdf?, url? }` | Render + save as new reference |
-| `/approve` | POST | `{ name }` | Copy current → reference |
-| `/approve-all` | POST | - | Approve all pending |
-| `/status` | GET | - | List pending diffs |
+| Endpoint       | Method | Input                         | Description                        |
+| -------------- | ------ | ----------------------------- | ---------------------------------- |
+| `/health`      | GET    | -                             | Health check                       |
+| `/compare/web` | POST   | `{ name, url, viewport }`     | Screenshot URL + compare           |
+| `/compare/pdf` | POST   | `{ name, pdf, dpi?, pages? }` | Screenshot PDF + compare           |
+| `/update/web`  | POST   | `{ name, url, viewport }`     | Screenshot URL + save as reference |
+| `/update/pdf`  | POST   | `{ name, pdf, dpi?, pages? }` | Screenshot PDF + save as reference |
+| `/approve`     | POST   | `{ name }`                    | Copy current → reference           |
+| `/approve-all` | POST   | -                             | Approve all pending                |
+| `/status`      | GET    | -                             | List pending diffs                 |
 
 ### Compare Flow
 
@@ -825,23 +854,24 @@ Lightweight client (~50 lines, no native deps):
 
 ```javascript
 // @eyediff/client
-import { compare, update, approve } from '@eyediff/client';
+import { compareWeb, comparePdf, approve } from '@eyediff/client';
 
-// Compare PDF against snapshot
-const result = await compare({
-  name: 'invoice',
-  pdf: pdfBuffer
+// Compare web page against snapshot
+const result = await compareWeb({
+  name: 'button-primary',
+  url: 'http://localhost:6006/iframe.html?id=button--primary',
+  viewport: { width: 1366, height: 768 },
 });
 // { match: true, score: 0 }
 
-// Compare URL (Storybook story, any webpage)
-const result = await compare({
-  name: 'button-primary',
-  url: 'http://localhost:6006/iframe.html?id=button--primary'
+// Compare PDF against snapshot
+const result = await comparePdf({
+  name: 'invoice',
+  pdf: pdfBuffer,
+  dpi: 144,
+  pages: 'all',
 });
-
-// Update reference
-await update({ name: 'invoice', pdf: pdfBuffer });
+// { match: false, score: 0.0042 }
 
 // Approve pending change
 await approve({ name: 'invoice' });
@@ -851,21 +881,21 @@ await approve({ name: 'invoice' });
 
 ```javascript
 // @eyediff/jest
-import { toMatchSnapshot } from '@eyediff/jest';
-expect.extend({ toMatchSnapshot });
+import { toMatchPdfSnapshot, toMatchWebSnapshot } from '@eyediff/jest';
+expect.extend({ toMatchPdfSnapshot, toMatchWebSnapshot });
 
 test('invoice renders correctly', async () => {
   const pdf = await generateInvoice();
 
   // Name auto-derived from test name
-  // Calls service internally
-  await expect(pdf).toMatchSnapshot();
+  await expect(pdf).toMatchPdfSnapshot();
+  // Options: await expect(pdf).toMatchPdfSnapshot({ dpi: 144, pages: '1' });
 });
 
 test('button primary', async () => {
-  // Works with URLs too
-  await expect('http://localhost:6006/iframe.html?id=button--primary')
-    .toMatchSnapshot();
+  await expect(
+    'http://localhost:6006/iframe.html?id=button--primary'
+  ).toMatchWebSnapshot({ viewport: { width: 1366, height: 768 } });
 });
 ```
 
@@ -891,30 +921,30 @@ eyediff service stop
 
 ### CLI Commands (Service)
 
-| Command | Description |
-|---------|-------------|
-| `eyediff service start` | Start long-running service |
-| `eyediff service stop` | Stop service |
+| Command                  | Description                          |
+| ------------------------ | ------------------------------------ |
+| `eyediff service start`  | Start long-running service           |
+| `eyediff service stop`   | Stop service                         |
 | `eyediff service status` | Check if running, show pending diffs |
 
 ### Packages
 
-| Package | Description |
-|---------|-------------|
-| `eyediff` | Rust CLI (npm binary distribution) |
-| `@eyediff/client` | JS client for service API |
-| `@eyediff/jest` | Jest matchers |
-| `@eyediff/vitest` | Vitest matchers (future) |
+| Package           | Description                        |
+| ----------------- | ---------------------------------- |
+| `eyediff`         | Rust CLI (npm binary distribution) |
+| `@eyediff/client` | JS client for service API          |
+| `@eyediff/jest`   | Jest matchers                      |
+| `@eyediff/vitest` | Vitest matchers (future)           |
 
 ### Benefits
 
-| Benefit | Explanation |
-|---------|-------------|
-| **Fast assertions** | HTTP call vs container startup per test |
-| **Consistent rendering** | Chrome (Docker) renders PDFs + URLs |
-| **Consistent diffs** | Same diff container for all comparisons |
-| **Unified workflow** | Same `eyediff review` for Storybook + PDFs |
-| **Light JS client** | No native dependencies in test code |
+| Benefit                  | Explanation                                |
+| ------------------------ | ------------------------------------------ |
+| **Fast assertions**      | HTTP call vs container startup per test    |
+| **Consistent rendering** | Chrome (Docker) renders PDFs + URLs        |
+| **Consistent diffs**     | Same diff container for all comparisons    |
+| **Unified workflow**     | Same `eyediff review` for Storybook + PDFs |
+| **Light JS client**      | No native dependencies in test code        |
 
 ## Extensibility
 
