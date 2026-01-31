@@ -120,6 +120,7 @@ Alternative diff engines (same protocol):
 | `toml`    | Config parsing              | MIT     |
 
 **Why bollard over direct `docker` CLI commands:**
+
 - Single persistent connection to Docker socket (vs N processes for N workers)
 - Native async - parallel container operations with no spawn overhead
 - Typed API for health checks, log streaming, cleanup
@@ -218,11 +219,11 @@ Content-Type: text/plain
 
 CLI derives the container-accessible URL from `storybook_url` config:
 
-| Host Config                  | Container URL                                      |
-| ---------------------------- | -------------------------------------------------- |
-| `http://localhost:6006`      | `http://host.docker.internal:6006/iframe.html?...` |
-| `http://127.0.0.1:6006`      | `http://host.docker.internal:6006/iframe.html?...` |
-| `http://my-server.com:6006`  | `http://my-server.com:6006/iframe.html?...`        |
+| Host Config                 | Container URL                                      |
+| --------------------------- | -------------------------------------------------- |
+| `http://localhost:6006`     | `http://host.docker.internal:6006/iframe.html?...` |
+| `http://127.0.0.1:6006`     | `http://host.docker.internal:6006/iframe.html?...` |
+| `http://my-server.com:6006` | `http://my-server.com:6006/iframe.html?...`        |
 
 **Linux note:** `host.docker.internal` requires Docker 20.10+ with `--add-host=host.docker.internal:host-gateway`. The CLI adds this flag automatically when spawning containers.
 
@@ -574,14 +575,14 @@ docker run \
   eyediff-worker
 ```
 
-| Flag                                    | Purpose                                        |
-| --------------------------------------- | ---------------------------------------------- |
-| `--rm`                                  | Auto-remove container on exit                  |
-| `-d`                                    | Run detached                                   |
-| `--shm-size=1g`                         | Chrome needs shared memory for stability       |
-| `--security-opt=seccomp=unconfined`     | Chrome sandboxing workaround (review security) |
-| `--add-host=host.docker.internal:...`   | Linux: map hostname to host gateway            |
-| `-p ${PORT}:3000`                       | Map worker HTTP port                           |
+| Flag                                  | Purpose                                        |
+| ------------------------------------- | ---------------------------------------------- |
+| `--rm`                                | Auto-remove container on exit                  |
+| `-d`                                  | Run detached                                   |
+| `--shm-size=1g`                       | Chrome needs shared memory for stability       |
+| `--security-opt=seccomp=unconfined`   | Chrome sandboxing workaround (review security) |
+| `--add-host=host.docker.internal:...` | Linux: map hostname to host gateway            |
+| `-p ${PORT}:3000`                     | Map worker HTTP port                           |
 
 ### Chrome Launch (inside container)
 
@@ -596,15 +597,15 @@ chromium \
   --remote-debugging-port=9222
 ```
 
-| Flag                          | Purpose                                    |
-| ----------------------------- | ------------------------------------------ |
-| `--headless`                  | No UI                                      |
-| `--disable-gpu`               | Avoid GPU issues in containers             |
-| `--hide-scrollbars`           | Consistent screenshots                     |
-| `--no-sandbox`                | Required when running as root in container |
-| `--disable-dev-shm-usage`     | Use /tmp instead of /dev/shm               |
-| `--remote-debugging-address`  | Allow external CDP connections             |
-| `--remote-debugging-port`     | CDP port                                   |
+| Flag                         | Purpose                                    |
+| ---------------------------- | ------------------------------------------ |
+| `--headless`                 | No UI                                      |
+| `--disable-gpu`              | Avoid GPU issues in containers             |
+| `--hide-scrollbars`          | Consistent screenshots                     |
+| `--no-sandbox`               | Required when running as root in container |
+| `--disable-dev-shm-usage`    | Use /tmp instead of /dev/shm               |
+| `--remote-debugging-address` | Allow external CDP connections             |
+| `--remote-debugging-port`    | CDP port                                   |
 
 ## Docker Images
 
@@ -732,22 +733,53 @@ eyediff/
 | 1    | Visual differences detected           |
 | 2    | Error (config, Docker, network, etc.) |
 
-## Future Considerations
+## Extensibility
 
-The worker protocol is simple enough to implement anywhere:
+### Required Traits
 
+Define abstractions upfront for future backends (implement only Docker in v1):
+
+```rust
+/// Screenshot capture backend
+trait ScreenshotBackend: Send + Sync {
+    async fn start(&self, count: usize) -> Result<()>;
+    async fn capture(&self, req: ScreenshotRequest) -> Result<Png>;
+    async fn shutdown(&self) -> Result<()>;
+}
+
+/// Image comparison backend
+trait DiffBackend: Send + Sync {
+    async fn compare(&self, reference: &Path, current: &Path) -> Result<DiffResult>;
+}
 ```
-POST /screenshot { url, viewport } → 200 <PNG bytes>
-```
 
-Potential alternative workers (not in initial release):
+**v1 implementations:** `DockerScreenshotBackend`, `DockerDiffBackend`
 
-- **AWS Lambda** - Serverless, scales to thousands
-- **Browserstack/Sauce Labs** - Real browsers, cross-browser testing
-- **Local Chrome** - No Docker, direct CDP connection (for faster local dev)
+### Future Backends
+
+The simple protocols enable alternative implementations:
+
+| Backend      | Screenshots | Diffs  | Use Case                              |
+| ------------ | ----------- | ------ | ------------------------------------- |
+| Docker (v1)  | ✅          | ✅     | Default, consistent                   |
+| Local Chrome | Future      | -      | Faster dev iteration                  |
+| AWS Lambda   | Future      | -      | Scale to thousands                    |
+| WASM         | -           | Future | Docker-free (pairs with Local Chrome) |
+
+**Note:** WASM diffs only make sense if non-Docker screenshots are added. If Docker is already required, Docker diffs are faster.
+
+### Local Chrome Detection (Future)
+
+When local Chrome backend is added, detection order:
+
+1. Config: `chrome_path = "/path/to/chrome"`
+2. Env: `EYEDIFF_CHROME_PATH`
+3. Platform-specific common locations
+4. PATH lookup
+5. Error with helpful message
 
 ## Out of Scope (Initial Release)
 
 - Storybook < 10
 - React Native / mobile apps
-- Non-Docker workers (Docker required for cross-platform consistency)
+- Non-Docker backends (traits defined, implementations future)
