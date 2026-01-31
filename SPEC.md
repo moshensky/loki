@@ -67,11 +67,11 @@ Alternative diff engines (same protocol):
 
 ### Why This Design
 
-- **Parallelization** - Spawn N workers locally for speed
-- **Pluggable workers** - Docker, Lambda, remote service, cloud browsers
-- **CLI has context** - Access to git, filesystem, config, references
-- **Workers are stateless** - No filesystem access needed, just URLs in, PNGs out
-- **Diffing on host** - No need to transfer reference images to workers
+- **Parallelization** - Spawn N screenshot workers for speed
+- **Pluggable** - Docker, Lambda, remote service, cloud browsers
+- **CLI has context** - Access to git, filesystem, config
+- **Workers are stateless** - Just URLs in, PNGs out
+- **Consistent diffs** - Diff container ensures identical results across platforms
 
 ## Modules
 
@@ -150,7 +150,7 @@ Response:
       "id": "example-button--primary",
       "name": "Primary",
       "title": "Example/Button",
-      "tags": ["dev", "test"]
+      "tags": ["dev", "test"],
       "importPath": "./src/components/Button.stories.tsx"
     }
   }
@@ -210,13 +210,19 @@ Content-Type: text/plain
 
 ### URL Format
 
-```
-http://host.docker.internal:6006/iframe.html?id={storyId}&viewMode=story
-```
+CLI derives the container-accessible URL from `storybook_url` config:
+
+| Host Config                  | Container URL                                      |
+| ---------------------------- | -------------------------------------------------- |
+| `http://localhost:6006`      | `http://host.docker.internal:6006/iframe.html?...` |
+| `http://127.0.0.1:6006`      | `http://host.docker.internal:6006/iframe.html?...` |
+| `http://my-server.com:6006`  | `http://my-server.com:6006/iframe.html?...`        |
+
+**Linux note:** `host.docker.internal` requires Docker 20.10+ with `--add-host=host.docker.internal:host-gateway`. The CLI adds this flag automatically when spawning containers.
 
 ### Chrome DevTools Protocol Flow
 
-1. Launch Chrome with `--headless --disable-gpu --hide-scrollbars`
+1. Launch Chrome with `--headless --disable-gpu --hide-scrollbars --no-sandbox`
 2. Connect via CDP (Chrome DevTools Protocol)
 3. For each story:
    a. Create new tab
@@ -229,11 +235,13 @@ http://host.docker.internal:6006/iframe.html?id={storyId}&viewMode=story
 
 ### Ready Detection
 
-Wait until all conditions are met:
+Wait until all conditions are met (with 10s timeout):
 
-1. Network idle (no pending requests for 500ms)
+1. Network idle (no pending requests for 500ms, ignoring WebSocket/EventSource)
 2. Fonts loaded (`document.fonts.ready`)
 3. DOM stable (no mutations for 100ms)
+
+**Note:** Long-lived connections (HMR websocket, polling) are excluded from network idle detection to prevent hangs.
 
 ### Screenshot Cropping
 
@@ -395,10 +403,25 @@ Docker images are pulled automatically on first run.
 | `eyediff init`                       | Initialize project (create dirs, gitignore) |
 | `eyediff test`                       | Run tests, compare against references       |
 | `eyediff test --changed-since <ref>` | Only test stories affected by git changes   |
-| `eyediff test --storybook-dir <dir>` | Use static build instead of live server     |
+| `eyediff test --storybook-dir <dir>` | Use static build (see Static Builds below)  |
 | `eyediff update`                     | Capture new reference screenshots           |
 | `eyediff approve [story-id]`         | Copy current to reference (accept changes)  |
 | `eyediff review`                     | Interactive review UI (see below)           |
+
+## Static Builds
+
+With `--storybook-dir`, eyediff serves the static build locally:
+
+```bash
+eyediff test --storybook-dir ./storybook-static
+```
+
+1. CLI starts an HTTP server on an available port (e.g., 9222)
+2. Serves the static build directory
+3. Workers connect to `http://host.docker.internal:9222/...`
+4. Server shuts down after test run completes
+
+This avoids needing a running Storybook dev server.
 
 ## Incremental Testing (TurboSnap-style)
 
@@ -414,6 +437,10 @@ eyediff test --changed-since main
 2. Parse `index.json` to get story → file mappings (`importPath`)
 3. Only test stories whose `importPath` is in the changed files list
 4. Reuse existing reference for unchanged stories
+
+### Limitations
+
+Only direct `importPath` matches are detected. Changes to shared components, CSS, or transitive dependencies won't trigger affected stories. For full coverage, run without `--changed-since` periodically (e.g., on main branch).
 
 ### Example
 
@@ -493,10 +520,10 @@ For CI or sharing, `eyediff test` also generates a static HTML report:
 ┌─────────────────────────────────────────────────────────────────┐
 │ eyediff Report                          [All] [Failed] [Passed] │
 ├─────────────────────────────────────────────────────────────────┤
-│ Search: [________________]                        [Approve All] │
+│ Search: [________________]                                      │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│ ✗ Button/Primary (desktop)                          [Approve]   │
+│ ✗ Button/Primary (desktop)                                      │
 │ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐                 │
 │ │  Reference  │ │   Current   │ │    Diff     │                 │
 │ │             │ │             │ │             │                 │
@@ -510,6 +537,8 @@ For CI or sharing, `eyediff test` also generates a static HTML report:
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+**Note:** Static report is view-only. Use `eyediff review` for interactive approval, or `eyediff approve` CLI command.
+
 ### Self-contained
 
 The HTML report is a single file with:
@@ -519,6 +548,55 @@ The HTML report is a single file with:
 - Vanilla JS (no framework dependencies)
 
 This allows easy sharing and viewing without a web server.
+
+## Docker Configuration
+
+> **Note:** Flags below are based on loki's working configuration. Review and adjust as needed.
+
+### Container Launch (via CLI)
+
+```bash
+docker run \
+  --rm \
+  -d \
+  --shm-size=1g \
+  --security-opt=seccomp=unconfined \
+  --add-host=host.docker.internal:host-gateway \
+  -p ${PORT}:3000 \
+  eyediff-worker
+```
+
+| Flag                                    | Purpose                                        |
+| --------------------------------------- | ---------------------------------------------- |
+| `--rm`                                  | Auto-remove container on exit                  |
+| `-d`                                    | Run detached                                   |
+| `--shm-size=1g`                         | Chrome needs shared memory for stability       |
+| `--security-opt=seccomp=unconfined`     | Chrome sandboxing workaround (review security) |
+| `--add-host=host.docker.internal:...`   | Linux: map hostname to host gateway            |
+| `-p ${PORT}:3000`                       | Map worker HTTP port                           |
+
+### Chrome Launch (inside container)
+
+```bash
+chromium \
+  --headless \
+  --disable-gpu \
+  --hide-scrollbars \
+  --no-sandbox \
+  --disable-dev-shm-usage \
+  --remote-debugging-address=0.0.0.0 \
+  --remote-debugging-port=9222
+```
+
+| Flag                          | Purpose                                    |
+| ----------------------------- | ------------------------------------------ |
+| `--headless`                  | No UI                                      |
+| `--disable-gpu`               | Avoid GPU issues in containers             |
+| `--hide-scrollbars`           | Consistent screenshots                     |
+| `--no-sandbox`                | Required when running as root in container |
+| `--disable-dev-shm-usage`     | Use /tmp instead of /dev/shm               |
+| `--remote-debugging-address`  | Allow external CDP connections             |
+| `--remote-debugging-port`     | CDP port                                   |
 
 ## Docker Images
 
