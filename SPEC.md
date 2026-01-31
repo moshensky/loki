@@ -505,32 +505,46 @@ EXPOSE 3000
 ENTRYPOINT ["node", "/app/src/server.js"]
 ```
 
-### Native Binary Distribution
+### Image Comparison
 
-dssim runs on the host (not in Docker). Binaries are distributed via platform-specific optional dependencies:
+Diff tool runs in Docker for consistency across dev machines and CI.
+
+#### Diff Protocol
 
 ```
-eyediff
-├── optionalDependencies:
-│   ├── @eyediff/dssim-darwin-arm64
-│   ├── @eyediff/dssim-darwin-x64
-│   ├── @eyediff/dssim-linux-x64
-│   └── @eyediff/dssim-win32-x64
+Input:  reference.png, current.png
+Output: exit code (0 = match, 1 = diff), diff.png, score to stdout
 ```
 
-npm automatically installs only the package matching the current platform.
+```bash
+docker run --rm \
+  -v .eyediff:/images \
+  eyediff-diff \
+  /images/reference/button.png \
+  /images/current/button.png \
+  /images/difference/button.png
 
-Each platform package contains:
-```
-@eyediff/dssim-darwin-arm64/
-├── package.json
-└── bin/
-    └── dssim          # prebuilt binary
+# stdout: 0.00042
+# exit 0 = below threshold, exit 1 = above threshold
 ```
 
-The main package resolves the correct binary at runtime:
+#### Pluggable Engines
+
+Any tool implementing the protocol works:
+
+| Engine        | Type                  | Notes                         |
+| ------------- | --------------------- | ----------------------------- |
+| `dssim`       | Perceptual (SSIM)     | Human vision model, default   |
+| `pixelmatch`  | Pixel-by-pixel        | Fast, exact                   |
+| `imagemagick` | Various algorithms    | Flexible, widely available    |
+| `looks-same`  | Antialiasing-tolerant | Good for font rendering diffs |
+
+Configure in `.eyediff/config.js`:
+
 ```javascript
-const binary = require(`@eyediff/dssim-${process.platform}-${process.arch}`);
+export default {
+  diffEngine: 'dssim', // or 'pixelmatch', 'imagemagick', etc.
+};
 ```
 
 ## Future: Alternative Workers
