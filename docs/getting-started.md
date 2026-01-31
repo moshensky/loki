@@ -29,10 +29,6 @@ Optionally add [loki configuration](/configuration.html) and integrate as follow
 
 Add `import 'loki/configure-react-native'` to `storybook/storybook.js`.
 
-#### Others
-
-When running a recent version of Storybook, no further integration should be needed. If you are running an old version, you might need to add `import 'loki/configure-react'` to `.storybook/preview.js` (create it if it doesn't exist already).
-
 ## Running your first tests
 
 ### 1. Review configuration
