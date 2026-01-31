@@ -146,6 +146,14 @@ Content-Type: application/json
 }
 ```
 
+Viewport fields:
+
+| Field               | Description                                    |
+| ------------------- | ---------------------------------------------- |
+| `width`             | Viewport width in CSS pixels                   |
+| `height`            | Viewport height in CSS pixels                  |
+| `deviceScaleFactor` | Pixel density ratio (1 = standard, 2 = retina) |
+
 Success:
 
 ```
@@ -332,7 +340,6 @@ export default {
     mobile: {
       width: 375,
       height: 667,
-      mobile: true,
       deviceScaleFactor: 2,
     },
   },
