@@ -16,35 +16,39 @@ Opinionated visual regression testing for Storybook 10+.
 ## Architecture
 
 ```
-┌──────────────────────────────────────────────────────────────────────────┐
-│ Host Machine                                                             │
-│                                                                          │
-│  ┌──────────────┐    ┌─────────────────────────────────────────────────┐ │
-│  │ Storybook    │    │ eyediff CLI (orchestrator)                      │ │
-│  │ :6006        │◄───│                                                 │ │
-│  └──────────────┘    │  1. Fetch index.json (story discovery)          │ │
-│                      │  2. Spawn screenshot worker(s)                  │ │
-│                      │  3. Distribute tasks, collect PNGs              │ │
-│                      │  4. Spawn diff container                        │ │
-│                      │  5. Compare against references                  │ │
-│                      │  6. Report results                              │ │
-│                      └──────────────┬────────────────┬─────────────────┘ │
-│                                     │                │                   │
-│            ┌────────────────────────┤                │                   │
-│            │                        │                │                   │
-│            ▼                        ▼                ▼                   │
-│  ┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐    │
-│  │ Screenshot       │    │ Screenshot       │    │ Diff             │    │
-│  │ Worker 1         │    │ Worker N         │    │ Container        │    │
-│  │ (Docker)         │    │ (Docker)         │    │ (Docker)         │    │
-│  │ Chrome ─► PNG    │    │ Chrome ─► PNG    │    │ PNG ─► Score     │    │
-│  └──────────────────┘    └──────────────────┘    └──────────────────┘    │
-│                                                                          │
-│  .eyediff/                                                               │
-│  ├── reference/  ◄──────────────────────────────────┐                    │
-│  ├── current/    ◄── screenshots saved here         │ mounted            │
-│  └── difference/ ◄── diff images written here ──────┘                    │
-└──────────────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────────┐
+│ Host Machine                                                              │
+│                                                                           │
+│  ┌──────────────┐    ┌──────────────────────────────────────────────────┐ │
+│  │ Storybook    │    │ eyediff CLI (orchestrator)                       │ │
+│  │ :6006        │◄───│                                                  │ │
+│  └──────────────┘    │  1. Fetch index.json (story discovery)           │ │
+│                      │  2. Spawn M screenshot workers                   │ │
+│                      │  3. Distribute tasks (round-robin), collect PNGs │ │
+│                      │  4. Spawn diff container                         │ │
+│                      │  5. Compare against references                   │ │
+│                      │  6. Report results                               │ │
+│                      └───────────────┬──────────────┬───────────────────┘ │
+│                                      │              │                     │
+│         ┌────────────────────────────┤              │                     │
+│         │                            │              │                     │
+│         ▼                            ▼              ▼                     │
+│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐        │
+│  │ Worker 1        │    │ Worker M        │    │ Diff Container  │        │
+│  │ (Docker)        │    │ (Docker)        │    │ (Docker)        │        │
+│  │                 │    │                 │    │                 │        │
+│  │ Chrome          │    │ Chrome          │    │ PNG ─► Score    │        │
+│  │ ├─Tab 1 ─► PNG  │    │ ├─Tab 1 ─► PNG  │    │                 │        │
+│  │ ├─Tab 2 ─► PNG  │    │ ├─Tab 2 ─► PNG  │    └─────────────────┘        │
+│  │ ├─Tab 3 ─► PNG  │    │ ├─Tab 3 ─► PNG  │                               │
+│  │ └─Tab N ─► PNG  │    │ └─Tab N ─► PNG  │    Total parallelism:         │
+│  └─────────────────┘    └─────────────────┘    M workers × N tabs         │
+│                                                                           │
+│  .eyediff/                                                                │
+│  ├── reference/  ◄───────────────────────────────────┐                    │
+│  ├── current/    ◄── screenshots saved here          │ mounted            │
+│  └── difference/ ◄── diff images written here ───────┘                    │
+└───────────────────────────────────────────────────────────────────────────┘
 
 Alternative screenshot workers (same protocol):
 ┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐
@@ -94,7 +98,10 @@ Alternative diff engines (same protocol):
 | ------------ | --------------------------------- |
 | `server`     | HTTP endpoint (axum)              |
 | `browser`    | Chrome CDP (chromiumoxide)        |
+| `tab_pool`   | Manages N concurrent tabs         |
 | `screenshot` | Navigate, wait for ready, capture |
+
+Worker manages tab pooling internally. CLI sends requests; worker assigns to available tab.
 
 ### Diff Container (Docker, license varies by engine)
 
@@ -133,6 +140,8 @@ Alternative diff engines (same protocol):
 | `axum`          | HTTP server              | MIT     |
 | `chromiumoxide` | Chrome DevTools Protocol | MIT     |
 | `tokio`         | Async runtime            | MIT     |
+
+Worker starts with tab pool size from env: `EYEDIFF_TABS=4`
 
 ### Diff Container
 
@@ -335,8 +344,11 @@ Config in `.eyediff/config.toml`:
 
 ```toml
 storybook_url = "http://localhost:6006"
-concurrency = 4
 diff_engine = "dssim"
+
+# Parallelism: workers × tabs_per_worker
+workers = 1           # Docker containers to spawn
+tabs_per_worker = 4   # Concurrent browser tabs per worker
 
 [viewports.desktop]
 width = 1366
@@ -357,13 +369,16 @@ include_aa = false
 
 ### Options
 
-| Option           | Default                 | Description                |
-| ---------------- | ----------------------- | -------------------------- |
-| `storybook_url`  | `http://localhost:6006` | Storybook server URL       |
-| `concurrency`    | `4`                     | Number of parallel workers |
-| `diff_engine`    | `dssim`                 | Diff engine to use         |
-| `viewports`      | `{ desktop: {...} }`    | Viewport configurations    |
-| `engine_options` | `{}`                    | Per-engine configuration   |
+| Option            | Default                 | Description                        |
+| ----------------- | ----------------------- | ---------------------------------- |
+| `storybook_url`   | `http://localhost:6006` | Storybook server URL               |
+| `workers`         | `1`                     | Number of worker containers        |
+| `tabs_per_worker` | `4`                     | Concurrent browser tabs per worker |
+| `diff_engine`     | `dssim`                 | Diff engine to use                 |
+| `viewports`       | `{ desktop: {...} }`    | Viewport configurations            |
+| `engine_options`  | `{}`                    | Per-engine configuration           |
+
+**Parallelism:** Total = `workers` × `tabs_per_worker` (default: 1 × 4 = 4)
 
 ## Installation
 
@@ -571,6 +586,7 @@ docker run \
   --shm-size=1g \
   --security-opt=seccomp=unconfined \
   --add-host=host.docker.internal:host-gateway \
+  -e EYEDIFF_TABS=4 \
   -p ${PORT}:3000 \
   eyediff-worker
 ```
@@ -582,6 +598,7 @@ docker run \
 | `--shm-size=1g`                       | Chrome needs shared memory for stability       |
 | `--security-opt=seccomp=unconfined`   | Chrome sandboxing workaround (review security) |
 | `--add-host=host.docker.internal:...` | Linux: map hostname to host gateway            |
+| `-e EYEDIFF_TABS=4`                   | Number of concurrent browser tabs              |
 | `-p ${PORT}:3000`                     | Map worker HTTP port                           |
 
 ### Chrome Launch (inside container)
