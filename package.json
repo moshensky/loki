@@ -37,6 +37,7 @@
       "test/*",
       "website",
       "examples/react",
+      "examples/react-vite-ts",
       "examples/renderer-aws-lambda",
       "examples/running-renderer-aws-lambda"
     ]
