@@ -511,33 +511,44 @@ Diff tool runs in Docker for consistency across dev machines and CI.
 
 #### Diff Protocol
 
-```
-Input:  reference.png, current.png
-Output: exit code (0 = match, 1 = diff), diff.png, score to stdout
-```
+Single container processes all images at once (avoids container startup overhead):
 
 ```bash
 docker run --rm \
-  -v .eyediff:/images \
+  -v .eyediff:/work \
   eyediff-diff \
-  /images/reference/button.png \
-  /images/current/button.png \
-  /images/difference/button.png
-
-# stdout: 0.00042
-# exit 0 = below threshold, exit 1 = above threshold
+  --reference /work/reference \
+  --current /work/current \
+  --output /work/difference \
+  --threshold 0.0001
 ```
+
+Output (JSON to stdout):
+
+```json
+{
+  "results": [
+    { "name": "button-primary.png", "score": 0, "match": true },
+    { "name": "button-secondary.png", "score": 0.00042, "match": false }
+  ],
+  "summary": { "total": 2, "passed": 1, "failed": 1 }
+}
+```
+
+Diff images written to `--output` directory only for failures.
 
 #### Pluggable Engines
 
-Any tool implementing the protocol works:
+Separate Docker images per engine (avoids license conflicts):
 
-| Engine        | Type                  | Notes                         |
-| ------------- | --------------------- | ----------------------------- |
-| `dssim`       | Perceptual (SSIM)     | Human vision model, default   |
-| `pixelmatch`  | Pixel-by-pixel        | Fast, exact                   |
-| `imagemagick` | Various algorithms    | Flexible, widely available    |
-| `looks-same`  | Antialiasing-tolerant | Good for font rendering diffs |
+| Engine        | Image                      | License    | Notes                    |
+| ------------- | -------------------------- | ---------- | ------------------------ |
+| `dssim`       | `eyediff-diff-dssim`       | AGPL-3.0   | Perceptual, human vision |
+| `pixelmatch`  | `eyediff-diff-pixelmatch`  | ISC        | Fast, pixel-by-pixel     |
+| `imagemagick` | `eyediff-diff-imagemagick` | Apache-2.0 | Various algorithms       |
+| `looks-same`  | `eyediff-diff-lookssame`   | MIT        | Antialiasing-tolerant    |
+
+All images implement the same protocol - only the comparison algorithm differs.
 
 Configure in `.eyediff/config.js`:
 
