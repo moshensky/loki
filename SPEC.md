@@ -543,9 +543,30 @@ Configure in `.eyediff/config.js`:
 
 ```javascript
 export default {
-  diffEngine: 'dssim', // or 'pixelmatch', 'imagemagick', etc.
+  diffEngine: 'dssim',
+
+  // Engine-specific options
+  engineOptions: {
+    dssim: {
+      threshold: 0.0001,
+    },
+    pixelmatch: {
+      threshold: 0.1,
+      includeAA: false, // ignore antialiasing
+    },
+    imagemagick: {
+      metric: 'AE', // absolute error count
+      fuzz: '5%',
+    },
+    looksSame: {
+      tolerance: 5,
+      antialiasingTolerance: 3,
+    },
+  },
 };
 ```
+
+Only the selected engine's options are used.
 
 ## Future: Alternative Workers
 
