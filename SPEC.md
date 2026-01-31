@@ -119,6 +119,12 @@ Alternative diff engines (same protocol):
 | `serde`   | Serialization               | MIT     |
 | `toml`    | Config parsing              | MIT     |
 
+**Why bollard over direct `docker` CLI commands:**
+- Single persistent connection to Docker socket (vs N processes for N workers)
+- Native async - parallel container operations with no spawn overhead
+- Typed API for health checks, log streaming, cleanup
+- Better error handling (no output parsing)
+
 ### Screenshot Worker (Rust)
 
 | Crate           | Purpose                  | License |
@@ -553,7 +559,9 @@ This allows easy sharing and viewing without a web server.
 
 > **Note:** Flags below are based on loki's working configuration. Review and adjust as needed.
 
-### Container Launch (via CLI)
+### Container Launch
+
+CLI uses bollard (Docker API) to spawn containers. Equivalent `docker run` for reference:
 
 ```bash
 docker run \
