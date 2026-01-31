@@ -525,9 +525,3 @@ Potential workers:
 - **Browserstack/Sauce Labs** - Real browsers, cross-browser testing
 - **Local Chrome** - No Docker, direct CDP connection
 - **Playwright Service** - Microsoft's cloud browsers
-
-## Out of Scope
-
-- Storybook < 10
-- React Native
-- Multiple diff engines (dssim only)
