@@ -2865,6 +2865,20 @@
     npmlog "^4.1.2"
     write-file-atomic "^2.3.0"
 
+"@loki/browser@^0.35.0":
+  version "0.35.0"
+  resolved "https://registry.yarnpkg.com/@loki/browser/-/browser-0.35.0.tgz#81e233f76276ab70ae337c08ceeba25156c05280"
+  integrity sha512-VYSd3bx9dOQ/Wo2C1gdNdE2mcYPleVtGInRcZmCOJ01va14L9VEGzG2zL1dMcmMUuJ2cT3Ri1GR59vEO3vKWvQ==
+  dependencies:
+    "@loki/integration-core" "^0.35.0"
+
+"@loki/integration-react@^0.35.1":
+  version "0.35.1"
+  resolved "https://registry.yarnpkg.com/@loki/integration-react/-/integration-react-0.35.1.tgz#82f5148e632be798df2a492aeb285f9d8fe56f5f"
+  integrity sha512-QHuCRohMv11ryF4C2R2BLzva7GiO1K1iw/GofyWwqRuKKBN6WIgaJbkFE7hyZ1HH5P1Ht4vALBrv7E/9XBXhMw==
+  dependencies:
+    "@loki/browser" "^0.35.0"
+
 "@mdx-js/loader@^1.6.22":
   version "1.6.22"
   resolved "https://registry.yarnpkg.com/@mdx-js/loader/-/loader-1.6.22.tgz#d9e8fe7f8185ff13c9c8639c048b123e30d322c4"
@@ -14576,6 +14590,20 @@ logalot@^2.0.0:
   dependencies:
     figures "^1.3.5"
     squeak "^1.0.0"
+
+loki@^0.35.1:
+  version "0.35.1"
+  resolved "https://registry.yarnpkg.com/loki/-/loki-0.35.1.tgz#2675c698786563c220101b2d4cc0251c4c3b0a41"
+  integrity sha512-cc9LVTtJBEEIv8SggluDS6/KK7sDKaCMoeLeiBw+b+UuUrf+EaMring5doPdNm+x1mcHq+FwRWrDeItSA/SdxA==
+  dependencies:
+    "@loki/integration-react" "^0.35.1"
+    "@loki/integration-react-native" "^0.35.0"
+    "@loki/integration-vue" "^0.35.0"
+    "@loki/runner" "^0.35.0"
+    "@loki/target-chrome-app" "^0.35.0"
+    "@loki/target-chrome-docker" "^0.35.0"
+    "@loki/target-native-android-emulator" "^0.35.0"
+    "@loki/target-native-ios-simulator" "^0.35.0"
 
 longest@^1.0.0:
   version "1.0.1"
