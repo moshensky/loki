@@ -6,40 +6,62 @@ Opinionated visual regression testing for Storybook 10+. Runs entirely in Docker
 
 ## Design Principles
 
-1. **Docker-first** - Everything runs in a single container (Chrome + diff tool + eyediff)
+1. **Docker-first** - Workers run in containers for consistency
 2. **Storybook 10 only** - No legacy API support
 3. **Zero configuration** - Sensible defaults, minimal setup
-4. **Fast** - Native diff tools, parallel execution
+4. **Fast** - Parallel workers, native diff tools
+5. **Pluggable** - Simple worker protocol enables alternative backends
 
 ## Architecture
 
 ```
-Host Machine
-┌────────────────────────────────────────────────────────────────┐
-│                                                                │
-│  ┌──────────────────┐      ┌─────────────────────────────────┐ │
-│  │ Storybook        │      │ eyediff CLI (npm package)       │ │
-│  │ localhost:6006   │      │ $ npx eyediff test              │ │
-│  └──────────────────┘      └───────────────┬─────────────────┘ │
-│           ▲                                │                   │
-│           │                                │ docker run        │
-│           │                                ▼                   │
-│  ┌────────┴───────────────────────────────────────────────────┐│
-│  │ Docker Container (ghcr.io/oblador/eyediff)                 ││
-│  │ ┌────────────────────────────────────────────────────────┐ ││
-│  │ │ 1. Fetch stories    GET /index.json                    │ ││
-│  │ │ 2. For each story:                                     │ ││
-│  │ │    └─► Chrome ─► Navigate ─► Screenshot ─► .eyediff/   │ ││
-│  │ │ 3. Compare          dssim reference.png current.png    │ ││
-│  │ └────────────────────────────────────────────────────────┘ ││
-│  │                                                            ││
-│  │ Volumes:                                                   ││
-│  │   .eyediff/ ◄──► /work/.eyediff (screenshots)              ││
-│  │   package.json ──► /work/package.json (config)             ││
-│  └────────────────────────────────────────────────────────────┘│
-│                                                                │
-└────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│ Host Machine                                                            │
+│                                                                         │
+│  ┌──────────────┐    ┌────────────────────────────────────────────────┐ │
+│  │ Storybook    │    │ eyediff CLI (orchestrator)                     │ │
+│  │ :6006        │◄───│                                                │ │
+│  └──────────────┘    │  1. Fetch index.json (story discovery)         │ │
+│                      │  2. Prepare screenshot tasks                   │ │
+│                      │  3. Spawn worker(s)                            │ │
+│                      │  4. Distribute tasks to workers                │ │
+│                      │  5. Collect screenshot results                 │ │
+│                      │  6. Diff against references (dssim)            │ │
+│                      │  7. Report results                             │ │
+│                      └──────────────┬─────────────────────────────────┘ │
+│                                     │                                   │
+│            ┌────────────────────────┼────────────────────────┐          │
+│            │                        │                        │          │
+│            ▼                        ▼                        ▼          │
+│  ┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐   │
+│  │ Worker 1         │    │ Worker 2         │    │ Worker N         │   │
+│  │ (Docker)         │    │ (Docker)         │    │ (Docker)         │   │
+│  │                  │    │                  │    │                  │   │
+│  │ Chrome ─► PNG    │    │ Chrome ─► PNG    │    │ Chrome ─► PNG    │   │
+│  └──────────────────┘    └──────────────────┘    └──────────────────┘   │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+
+Alternative workers (same protocol):
+┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐
+│ AWS Lambda       │    │ Remote Service   │    │ Browserstack     │
+└──────────────────┘    └──────────────────┘    └──────────────────┘
 ```
+
+### Separation of Concerns
+
+| Component | Responsibility |
+|-----------|----------------|
+| **CLI (orchestrator)** | Story discovery, task distribution, diffing, reporting |
+| **Worker** | Receive URL → Screenshot → Return PNG buffer |
+
+### Why This Design
+
+- **Parallelization** - Spawn N workers locally for speed
+- **Pluggable workers** - Docker, Lambda, remote service, cloud browsers
+- **CLI has context** - Access to git, filesystem, config, references
+- **Workers are stateless** - No filesystem access needed, just URLs in, PNGs out
+- **Diffing on host** - No need to transfer reference images to workers
 
 ## Installation
 
@@ -121,6 +143,85 @@ Response structure:
 
 - Only entries with `type: "story"` (exclude docs)
 - Skip stories with `eyediff-skip` tag
+
+## Worker Protocol
+
+Communication between CLI and workers via JSON over HTTP.
+
+### Worker API
+
+Worker exposes a simple HTTP endpoint:
+
+```
+POST /screenshot
+Content-Type: application/json
+
+{
+  "url": "http://host.docker.internal:6006/iframe.html?id=button--primary&viewMode=story",
+  "viewport": {
+    "width": 1366,
+    "height": 768,
+    "deviceScaleFactor": 1,
+    "mobile": false
+  }
+}
+```
+
+### Success Response
+
+```
+HTTP/1.1 200 OK
+Content-Type: image/png
+X-Timing-Navigate: 120
+X-Timing-Render: 340
+X-Timing-Screenshot: 50
+
+<raw PNG bytes>
+```
+
+### Error Response
+
+```
+HTTP/1.1 500 Internal Server Error
+Content-Type: text/plain
+
+Navigation timeout after 30000ms
+```
+
+### CLI Usage
+
+```javascript
+const response = await fetch(`http://localhost:${port}/screenshot`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(task)
+});
+
+if (!response.ok) {
+  const error = await response.text();
+  throw new Error(error);
+}
+
+const screenshot = Buffer.from(await response.arrayBuffer());
+const timing = {
+  navigate: response.headers.get('X-Timing-Navigate'),
+  render: response.headers.get('X-Timing-Render'),
+  screenshot: response.headers.get('X-Timing-Screenshot')
+};
+```
+
+### Worker Lifecycle
+
+```bash
+# CLI spawns worker
+docker run -d -p 3000:3000 ghcr.io/oblador/eyediff-worker
+
+# CLI sends tasks
+curl -X POST http://localhost:3000/screenshot -d '{"url": "...", "viewport": {...}}'
+
+# CLI stops worker when done
+docker stop <container_id>
+```
 
 ## Screenshot Capture
 
@@ -229,27 +330,41 @@ dssim -o diff.png reference.png current.png
 
 ## Configuration
 
-Minimal config in `package.json`:
+Config in `package.json` or `eyediff.config.js`:
 
 ```json
 {
   "eyediff": {
-    "configurations": {
-      "chrome.laptop": {
+    "storybookUrl": "http://localhost:6006",
+    "concurrency": 4,
+    "diffThreshold": 0,
+    "viewports": {
+      "desktop": {
         "width": 1366,
         "height": 768
       },
-      "chrome.mobile": {
+      "mobile": {
         "width": 375,
         "height": 667,
-        "mobile": true
+        "mobile": true,
+        "deviceScaleFactor": 2
       }
-    },
-    "diffThreshold": 0,
-    "storybookUrl": "http://host.docker.internal:6006"
+    }
   }
 }
 ```
+
+### Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `storybookUrl` | `http://localhost:6006` | Storybook server URL |
+| `concurrency` | `4` | Number of parallel workers |
+| `diffThreshold` | `0` | Acceptable dssim score (0 = exact match) |
+| `viewports` | `{ desktop: {...} }` | Viewport configurations |
+| `referenceDir` | `.eyediff/reference` | Baseline screenshots |
+| `currentDir` | `.eyediff/current` | Current run screenshots |
+| `diffDir` | `.eyediff/diff` | Diff images |
 
 ## CLI Commands
 
@@ -290,6 +405,53 @@ Stories to test:
   ⊘ example-page--logged-in     (skipped, no changes)
 ```
 
+## Concurrency
+
+```bash
+# Default: 4 parallel workers
+npx eyediff test
+
+# Custom concurrency
+npx eyediff test --concurrency 8
+```
+
+### Worker Pool
+
+```javascript
+class WorkerPool {
+  constructor(concurrency) {
+    this.workers = [];
+    this.queue = [];
+    this.concurrency = concurrency;
+  }
+
+  async spawn() {
+    for (let i = 0; i < this.concurrency; i++) {
+      const port = 3000 + i;
+      const container = await docker.run({
+        image: 'ghcr.io/oblador/eyediff-worker',
+        ports: [`${port}:3000`],
+        network: 'host.docker.internal:host-gateway'
+      });
+      this.workers.push({ port, container });
+    }
+  }
+
+  async execute(task) {
+    const worker = await this.getAvailableWorker();
+    const result = await fetch(`http://localhost:${worker.port}/screenshot`, {
+      method: 'POST',
+      body: JSON.stringify(task)
+    });
+    return result.json();
+  }
+
+  async shutdown() {
+    await Promise.all(this.workers.map(w => docker.stop(w.container)));
+  }
+}
+```
+
 ## Exit Codes
 
 | Code | Meaning                                       |
@@ -298,9 +460,9 @@ Stories to test:
 | 1    | Visual differences detected                   |
 | 2    | Error (stories not found, Chrome crash, etc.) |
 
-## Docker Image
+## Worker Docker Image
 
-Published to `ghcr.io/oblador/eyediff`. Contains Chrome, dssim, and the test runner.
+Published to `ghcr.io/oblador/eyediff-worker`. Contains Chrome and HTTP screenshot service.
 
 ```dockerfile
 FROM node:24
@@ -320,66 +482,94 @@ RUN apt-get update && apt-get install -y \
     xdg-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Rust and dssim
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
-    && ~/.cargo/bin/cargo install dssim \
-    && cp ~/.cargo/bin/dssim /usr/local/bin/ \
-    && rm -rf ~/.cargo ~/.rustup
-
-# Copy eyediff source
+# Copy worker source
 WORKDIR /app
-COPY docker/src ./src
-COPY docker/package.json .
+COPY worker/src ./src
+COPY worker/package.json .
 RUN npm install --production
 
-WORKDIR /work
-ENTRYPOINT ["node", "/app/src/cli.js"]
+EXPOSE 3000
+ENTRYPOINT ["node", "/app/src/server.js"]
 ```
+
+Note: dssim runs on the **host**. The npm package includes prebuilt binaries for:
+- macOS (arm64, x64)
+- Linux (x64)
+- Windows (x64)
 
 ## Package Structure
 
 ```
 eyediff/
 ├── bin/
-│   └── eyediff           # CLI wrapper (runs Docker)
-├── package.json
-└── docker/
-    ├── Dockerfile
-    └── src/
-        ├── cli.js        # Command parsing (inside container)
-        ├── runner.js     # Test orchestration
-        ├── chrome.js     # CDP + screenshots
-        ├── stories.js    # Fetch from index.json
-        └── diff.js       # dssim wrapper
+│   └── eyediff              # CLI entry point
+├── src/
+│   ├── cli.js               # Command parsing
+│   ├── runner.js            # Test orchestration
+│   ├── stories.js           # Fetch from index.json
+│   ├── worker-manager.js    # Spawn/manage Docker workers
+│   ├── diff.js              # dssim wrapper
+│   └── reporter.js          # Output results
+├── worker/
+│   ├── Dockerfile
+│   ├── package.json
+│   └── src/
+│       ├── server.js        # HTTP server
+│       └── screenshot.js    # Chrome CDP logic
+└── package.json
 ```
 
-## CLI Wrapper
-
-The npm package is a thin wrapper that invokes Docker:
+## CLI Flow
 
 ```javascript
 #!/usr/bin/env node
-const { execSync } = require('child_process');
-const { resolve } = require('path');
 
-const cwd = process.cwd();
-const args = process.argv.slice(2).join(' ');
+async function main() {
+  // 1. Load config
+  const config = await loadConfig();
 
-execSync(
-  `docker run --rm -it \
-  -v ${cwd}/.eyediff:/work/.eyediff \
-  -v ${cwd}/package.json:/work/package.json:ro \
-  --add-host=host.docker.internal:host-gateway \
-  ghcr.io/oblador/eyediff ${args}`,
-  { stdio: 'inherit' }
-);
+  // 2. Discover stories
+  const stories = await fetchStories(config.storybookUrl);
+
+  // 3. Filter (--changed-since, tags)
+  const filtered = filterStories(stories, options);
+
+  // 4. Prepare tasks
+  const tasks = prepareTasksForViewports(filtered, config.viewports);
+
+  // 5. Spawn workers
+  const workers = await spawnWorkers(config.concurrency);
+
+  // 6. Distribute tasks and collect screenshots
+  const results = await executeTasksInParallel(tasks, workers);
+
+  // 7. Diff against references
+  const diffs = await diffResults(results, config.referenceDir);
+
+  // 8. Report
+  report(diffs);
+
+  // 9. Cleanup
+  await stopWorkers(workers);
+}
 ```
+
+## Future: Alternative Workers
+
+The worker protocol is simple enough to implement anywhere:
+
+```
+POST /screenshot { url, viewport } → 200 <PNG bytes>
+```
+
+Potential workers:
+- **AWS Lambda** - Serverless, scales to thousands
+- **Browserstack/Sauce Labs** - Real browsers, cross-browser testing
+- **Local Chrome** - No Docker, direct CDP connection
+- **Playwright Service** - Microsoft's cloud browsers
 
 ## Out of Scope
 
 - Storybook < 10
 - React Native
-- Vue integration
-- AWS Lambda target
-- Local Chrome (non-Docker)
-- Multiple diff engines
+- Multiple diff engines (dssim only)
