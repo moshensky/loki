@@ -15,42 +15,54 @@ Opinionated visual regression testing for Storybook 10+.
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│ Host Machine                                                            │
-│                                                                         │
-│  ┌──────────────┐    ┌────────────────────────────────────────────────┐ │
-│  │ Storybook    │    │ eyediff CLI (orchestrator)                     │ │
-│  │ :6006        │◄───│                                                │ │
-│  └──────────────┘    │  1. Fetch index.json (story discovery)         │ │
-│                      │  2. Prepare screenshot tasks                   │ │
-│                      │  3. Spawn worker(s)                            │ │
-│                      │  4. Distribute tasks to workers                │ │
-│                      │  5. Collect screenshot results                 │ │
-│                      │  6. Diff against references (dssim)            │ │
-│                      │  7. Report results                             │ │
-│                      └──────────────┬─────────────────────────────────┘ │
-│                                     │                                   │
-│            ┌────────────────────────┼────────────────────────┐          │
-│            ▼                        ▼                        ▼          │
-│  ┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐   │
-│  │ Worker 1         │    │ Worker 2         │    │ Worker N         │   │
-│  │ (Docker)         │    │ (Docker)         │    │ (Docker)         │   │
-│  │ Chrome ─► PNG    │    │ Chrome ─► PNG    │    │ Chrome ─► PNG    │   │
-│  └──────────────────┘    └──────────────────┘    └──────────────────┘   │
-└─────────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│ Host Machine                                                             │
+│                                                                          │
+│  ┌──────────────┐    ┌─────────────────────────────────────────────────┐ │
+│  │ Storybook    │    │ eyediff CLI (orchestrator)                      │ │
+│  │ :6006        │◄───│                                                 │ │
+│  └──────────────┘    │  1. Fetch index.json (story discovery)          │ │
+│                      │  2. Spawn screenshot worker(s)                  │ │
+│                      │  3. Distribute tasks, collect PNGs              │ │
+│                      │  4. Spawn diff container                        │ │
+│                      │  5. Compare against references                  │ │
+│                      │  6. Report results                              │ │
+│                      └──────────────┬────────────────┬─────────────────┘ │
+│                                     │                │                   │
+│            ┌────────────────────────┤                │                   │
+│            │                        │                │                   │
+│            ▼                        ▼                ▼                   │
+│  ┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐    │
+│  │ Screenshot       │    │ Screenshot       │    │ Diff             │    │
+│  │ Worker 1         │    │ Worker N         │    │ Container        │    │
+│  │ (Docker)         │    │ (Docker)         │    │ (Docker)         │    │
+│  │ Chrome ─► PNG    │    │ Chrome ─► PNG    │    │ PNG ─► Score     │    │
+│  └──────────────────┘    └──────────────────┘    └──────────────────┘    │
+│                                                                          │
+│  .eyediff/                                                               │
+│  ├── reference/  ◄──────────────────────────────────┐                    │
+│  ├── current/    ◄── screenshots saved here         │ mounted            │
+│  └── difference/ ◄── diff images written here ──────┘                    │
+└──────────────────────────────────────────────────────────────────────────┘
 
-Alternative workers (same protocol):
+Alternative screenshot workers (same protocol):
 ┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐
 │ AWS Lambda       │    │ Browserstack     │    │ Local Chrome     │
+└──────────────────┘    └──────────────────┘    └──────────────────┘
+
+Alternative diff engines (same protocol):
+┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐
+│ dssim            │    │ pixelmatch       │    │ looks-same       │
 └──────────────────┘    └──────────────────┘    └──────────────────┘
 ```
 
 ### Separation of Concerns
 
-| Component              | Responsibility                                         |
-| ---------------------- | ------------------------------------------------------ |
-| **CLI (orchestrator)** | Story discovery, task distribution, diffing, reporting |
-| **Worker**             | Receive URL → Screenshot → Return PNG buffer           |
+| Component              | Responsibility                                |
+| ---------------------- | --------------------------------------------- |
+| **CLI (orchestrator)** | Story discovery, task distribution, reporting |
+| **Screenshot Worker**  | Receive URL → Return PNG buffer               |
+| **Diff Container**     | Compare images → Return scores + diff images  |
 
 ### Why This Design
 
