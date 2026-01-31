@@ -2879,6 +2879,68 @@
   dependencies:
     "@loki/browser" "^0.35.0"
 
+"@loki/runner@^0.35.0":
+  version "0.35.0"
+  resolved "https://registry.yarnpkg.com/@loki/runner/-/runner-0.35.0.tgz#0d5d0df4b87342c34fdc1bc02258ecef937141c0"
+  integrity sha512-tCVOA9P5IJSeXYcW68EeycYN68CHUpU2bWYVkAxxKXDhVHnBjI6W+lVMkJbky5WCF+ly2BuczjaJy7yIe8Ucvg==
+  dependencies:
+    "@loki/core" "^0.35.0"
+    "@loki/diff-graphics-magick" "^0.35.0"
+    "@loki/diff-looks-same" "^0.35.0"
+    "@loki/diff-pixelmatch" "^0.35.0"
+    "@loki/target-chrome-app" "^0.35.0"
+    "@loki/target-chrome-aws-lambda" "^0.35.0"
+    "@loki/target-chrome-docker" "^0.35.0"
+    "@loki/target-native-android-emulator" "^0.35.0"
+    "@loki/target-native-ios-simulator" "^0.35.0"
+    async "^3.2.0"
+    chalk "^4.1.0"
+    ci-info "^2.0.0"
+    cosmiconfig "^7.0.0"
+    fs-extra "^9.1.0"
+    import-jsx "^4.0.1"
+    ink "^3.2.0"
+    minimist "^1.2.0"
+    ramda "^0.27.1"
+    react "^17.0.2"
+    transliteration "^2.2.0"
+
+"@loki/target-chrome-app@^0.35.0":
+  version "0.35.0"
+  resolved "https://registry.yarnpkg.com/@loki/target-chrome-app/-/target-chrome-app-0.35.0.tgz#df90b414cb52cf633b6f5004f64a9a4e5bf443fe"
+  integrity sha512-P75JPKMISjqitPSsDMRbuXdQclbseezGTXmsuLQw/k+66I2gXsfAeQgXeHzgpXq1l5sPygnd2SHFjLJlm8wUzA==
+  dependencies:
+    "@loki/core" "^0.35.0"
+    "@loki/target-chrome-core" "^0.35.0"
+    chrome-launcher "0.15.2"
+    chrome-remote-interface "^0.32.1"
+    debug "^4.1.1"
+    find-free-port-sync "^1.0.0"
+
+"@loki/target-chrome-core@^0.35.0":
+  version "0.35.0"
+  resolved "https://registry.yarnpkg.com/@loki/target-chrome-core/-/target-chrome-core-0.35.0.tgz#fd3816b548e568c3a88fae97f1892aace1fa7d48"
+  integrity sha512-uFZ34yy+D64ySxJVApoBHgZqwqs87ujvksw4/T4Uvmh0+5orI+6D9b1yq06a7CEUqgleTnMIO+f+ZM7+mhoKQQ==
+  dependencies:
+    "@loki/browser" "^0.35.0"
+    "@loki/core" "^0.35.0"
+    "@loki/integration-core" "^0.35.0"
+    debug "^4.1.1"
+
+"@loki/target-chrome-docker@^0.35.0":
+  version "0.35.0"
+  resolved "https://registry.yarnpkg.com/@loki/target-chrome-docker/-/target-chrome-docker-0.35.0.tgz#59e786233debe1fdfa40462b743c338e818d5eab"
+  integrity sha512-GDDP99BYEOgobuR2D0lYOCMwMb1n9VAUXtv1oXoV1q3nXh0xerqxFmEOqWFLhX+/hIWAqm7JXSKiCorMMwyctw==
+  dependencies:
+    "@loki/core" "^0.35.0"
+    "@loki/target-chrome-core" "^0.35.0"
+    chrome-remote-interface "^0.32.1"
+    debug "^4.1.1"
+    execa "^5.0.0"
+    find-free-port-sync "^1.0.0"
+    fs-extra "^9.1.0"
+    wait-port "^1.1.0"
+
 "@mdx-js/loader@^1.6.22":
   version "1.6.22"
   resolved "https://registry.yarnpkg.com/@mdx-js/loader/-/loader-1.6.22.tgz#d9e8fe7f8185ff13c9c8639c048b123e30d322c4"
