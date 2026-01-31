@@ -170,7 +170,7 @@ Content-Type: text/plain
 
 ### Screenshot URL Format
 
-```
+````
 
 ### Worker Lifecycle
 
@@ -183,7 +183,7 @@ curl -X POST http://localhost:3000/screenshot -d '{"url": "...", "viewport": {..
 
 # CLI stops worker when done
 docker stop <container_id>
-```
+````
 
 ## Screenshot Capture
 
@@ -219,9 +219,7 @@ await Promise.all([
   page.evaluate(() => document.fonts.ready),
 
   // No pending CSS animations
-  page.evaluate(() =>
-    getComputedStyle(document.body).animationName === 'none'
-  ),
+  page.evaluate(() => getComputedStyle(document.body).animationName === 'none'),
 ]);
 
 // Additional quiet period (DOM mutations settled)
@@ -240,7 +238,7 @@ const box = await page.evaluate(() => {
     x: rect.x,
     y: rect.y,
     width: rect.width,
-    height: rect.height
+    height: rect.height,
   };
 });
 
@@ -318,15 +316,15 @@ Config in `package.json` or `eyediff.config.js`:
 
 ### Options
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `storybookUrl` | `http://localhost:6006` | Storybook server URL |
-| `concurrency` | `4` | Number of parallel workers |
-| `diffThreshold` | `0` | Acceptable dssim score (0 = exact match) |
-| `viewports` | `{ desktop: {...} }` | Viewport configurations |
-| `referenceDir` | `.eyediff/reference` | Baseline screenshots |
-| `currentDir` | `.eyediff/current` | Current run screenshots |
-| `diffDir` | `.eyediff/diff` | Diff images |
+| Option          | Default                 | Description                              |
+| --------------- | ----------------------- | ---------------------------------------- |
+| `storybookUrl`  | `http://localhost:6006` | Storybook server URL                     |
+| `concurrency`   | `4`                     | Number of parallel workers               |
+| `diffThreshold` | `0`                     | Acceptable dssim score (0 = exact match) |
+| `viewports`     | `{ desktop: {...} }`    | Viewport configurations                  |
+| `referenceDir`  | `.eyediff/reference`    | Baseline screenshots                     |
+| `currentDir`    | `.eyediff/current`      | Current run screenshots                  |
+| `diffDir`       | `.eyediff/diff`         | Diff images                              |
 
 ## CLI Commands
 
@@ -393,7 +391,7 @@ class WorkerPool {
       const container = await docker.run({
         image: 'ghcr.io/oblador/eyediff-worker',
         ports: [`${port}:3000`],
-        network: 'host.docker.internal:host-gateway'
+        network: 'host.docker.internal:host-gateway',
       });
       this.workers.push({ port, container });
     }
@@ -403,13 +401,13 @@ class WorkerPool {
     const worker = await this.getAvailableWorker();
     const result = await fetch(`http://localhost:${worker.port}/screenshot`, {
       method: 'POST',
-      body: JSON.stringify(task)
+      body: JSON.stringify(task),
     });
     return result.json();
   }
 
   async shutdown() {
-    await Promise.all(this.workers.map(w => docker.stop(w.container)));
+    await Promise.all(this.workers.map((w) => docker.stop(w.container)));
   }
 }
 ```
@@ -455,6 +453,7 @@ ENTRYPOINT ["node", "/app/src/server.js"]
 ```
 
 Note: dssim runs on the **host**. The npm package includes prebuilt binaries for:
+
 - macOS (arm64, x64)
 - Linux (x64)
 - Windows (x64)
@@ -525,6 +524,7 @@ POST /screenshot { url, viewport } → 200 <PNG bytes>
 ```
 
 Potential workers:
+
 - **AWS Lambda** - Serverless, scales to thousands
 - **Browserstack/Sauce Labs** - Real browsers, cross-browser testing
 - **Local Chrome** - No Docker, direct CDP connection
