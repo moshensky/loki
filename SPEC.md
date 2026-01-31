@@ -1,4 +1,4 @@
-# Loki 1.0 Specification
+# eyediff Specification
 
 ## Overview
 
@@ -6,7 +6,7 @@ Opinionated visual regression testing for Storybook 10+. Runs entirely in Docker
 
 ## Design Principles
 
-1. **Docker-first** - Everything runs in a single container (Chrome + diff tool + loki)
+1. **Docker-first** - Everything runs in a single container (Chrome + diff tool + eyediff)
 2. **Storybook 10 only** - No legacy API support
 3. **Zero configuration** - Sensible defaults, minimal setup
 4. **Fast** - Native diff tools, parallel execution
@@ -15,10 +15,10 @@ Opinionated visual regression testing for Storybook 10+. Runs entirely in Docker
 
 ```
 ┌─────────────────────────────────────────┐
-│  loki Docker container                  │
+│  eyediff Docker container                  │
 │  ├── Chrome headless                    │
 │  ├── dssim (native image diff)          │
-│  └── loki CLI                           │
+│  └── eyediff CLI                           │
 └─────────────────────────────────────────┘
             │
             ▼
@@ -32,13 +32,13 @@ Opinionated visual regression testing for Storybook 10+. Runs entirely in Docker
 
 ```bash
 # Run tests
-docker run -v $(pwd)/.loki:/loki ghcr.io/oblador/loki test
+docker run -v $(pwd)/.eyediff:/eyediff ghcr.io/oblador/eyediff test
 
 # Update references
-docker run -v $(pwd)/.loki:/loki ghcr.io/oblador/loki update
+docker run -v $(pwd)/.eyediff:/eyediff ghcr.io/oblador/eyediff update
 
 # Approve changes
-docker run -v $(pwd)/.loki:/loki ghcr.io/oblador/loki approve
+docker run -v $(pwd)/.eyediff:/eyediff ghcr.io/oblador/eyediff approve
 ```
 
 ## Story Discovery
@@ -68,7 +68,7 @@ Response structure:
 ### Filtering
 
 - Only entries with `type: "story"` (exclude docs)
-- Skip stories with `loki-skip` tag
+- Skip stories with `eyediff-skip` tag
 
 ## Screenshot Capture
 
@@ -122,7 +122,7 @@ dssim -o diff.png reference.png current.png
 ## Directory Structure
 
 ```
-.loki/
+.eyediff/
 ├── reference/           # Baseline screenshots
 │   ├── chrome_laptop_Button_Primary.png
 │   └── chrome_laptop_Button_Secondary.png
@@ -138,7 +138,7 @@ Minimal config in `package.json`:
 
 ```json
 {
-  "loki": {
+  "eyediff": {
     "configurations": {
       "chrome.laptop": {
         "width": 1366,
@@ -160,9 +160,9 @@ Minimal config in `package.json`:
 
 | Command | Description |
 |---------|-------------|
-| `loki test` | Run tests, compare against references |
-| `loki update` | Capture new reference screenshots |
-| `loki approve` | Copy current to reference (accept changes) |
+| `eyediff test` | Run tests, compare against references |
+| `eyediff update` | Capture new reference screenshots |
+| `eyediff approve` | Copy current to reference (accept changes) |
 
 ## Exit Codes
 
@@ -175,7 +175,7 @@ Minimal config in `package.json`:
 ## Docker Image
 
 ```dockerfile
-FROM node:20-slim
+FROM node:24
 
 # Install Chrome
 RUN apt-get update && apt-get install -y \
@@ -195,20 +195,20 @@ RUN apt-get update && apt-get install -y \
 # Install dssim
 RUN cargo install dssim
 
-# Install loki
+# Install eyediff
 COPY . /app
 WORKDIR /app
 RUN npm install
 
-ENTRYPOINT ["node", "/app/bin/loki"]
+ENTRYPOINT ["node", "/app/bin/eyediff"]
 ```
 
 ## Package Structure (Simplified)
 
 ```
-loki/
+eyediff/
 ├── bin/
-│   └── loki              # CLI entry point
+│   └── eyediff              # CLI entry point
 ├── src/
 │   ├── cli.js            # Command parsing
 │   ├── runner.js         # Test orchestration
@@ -218,13 +218,6 @@ loki/
 ├── Dockerfile
 └── package.json
 ```
-
-## Migration from 0.x
-
-1. Remove `import 'loki/configure-react'` from `.storybook/preview.js`
-2. Update to Storybook 10
-3. Use `loki-skip` tag instead of `parameters.loki.skip`
-4. Run via Docker instead of local Chrome/Docker target
 
 ## Out of Scope
 
