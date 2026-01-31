@@ -175,23 +175,6 @@ Content-Type: text/plain
 <error message>
 ```
 
-### Screenshot URL Format
-
-````
-
-### Worker Lifecycle
-
-```bash
-# CLI spawns worker
-docker run -d -p 3000:3000 ghcr.io/oblador/eyediff-worker
-
-# CLI sends tasks
-curl -X POST http://localhost:3000/screenshot -d '{"url": "...", "viewport": {...}}'
-
-# CLI stops worker when done
-docker stop <container_id>
-````
-
 ## Screenshot Capture
 
 ### URL Format
