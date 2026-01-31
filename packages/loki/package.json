@@ -1,6 +1,6 @@
 {
   "name": "loki",
-  "version": "0.35.1",
+  "version": "0.36.0",
   "description": "Visual Regression Testing for Storybook",
   "bin": {
     "loki": "bin/loki"
@@ -44,7 +44,6 @@
     "*.js"
   ],
   "dependencies": {
-    "@loki/integration-react": "^0.35.1",
     "@loki/integration-react-native": "^0.35.0",
     "@loki/integration-vue": "^0.35.0",
     "@loki/runner": "^0.35.0",
@@ -54,12 +53,7 @@
     "@loki/target-native-ios-simulator": "^0.35.0"
   },
   "peerDependencies": {
-    "@storybook/react": "^5 || ^6 || ^7 || ^8"
-  },
-  "peerDependenciesMeta": {
-    "@storybook/react": {
-      "optional": true
-    }
+    "storybook": "^10.0.0"
   },
   "publishConfig": {
     "access": "public"
