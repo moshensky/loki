@@ -707,6 +707,27 @@ All images implement the same protocol - only the comparison algorithm differs.
 
 Configure engine in `.eyediff/config.toml` (see Configuration section).
 
+### Reusable Diff Container
+
+The diff container is designed for reuse beyond eyediff. Any tool needing consistent cross-platform image comparison can use it:
+
+```bash
+# From eyediff (Rust)
+docker run eyediff-diff --reference a.png --current b.png
+
+# From pdf-visual-diff (Node.js)
+const { execSync } = require('child_process');
+execSync('docker run eyediff-diff ...');
+
+# From any language
+POST http://localhost:3001/diff { reference, current } → { score, diff }
+```
+
+Potential consumers:
+- **eyediff** - Storybook visual regression
+- **pdf-visual-diff** - PDF visual regression
+- **Other tools** - Any image comparison needing cross-platform consistency
+
 ## Project Structure
 
 ```
@@ -749,6 +770,151 @@ eyediff/
 | 0    | All tests passed                      |
 | 1    | Visual differences detected           |
 | 2    | Error (config, Docker, network, etc.) |
+
+## Service Mode
+
+eyediff can run as a long-running service for integration with test frameworks (Jest, Vitest, etc.).
+
+### Use Case
+
+- **Batch mode (CLI):** `eyediff test` - Storybook screenshots, runs once
+- **Service mode:** `eyediff service start` - Long-running, serves test assertions
+
+Service mode enables fast assertions without container startup per test.
+
+### Starting the Service
+
+```bash
+# From project root (reads .eyediff/config.toml)
+eyediff service start
+
+# Service manages:
+# - .eyediff/reference/    (reads)
+# - .eyediff/current/      (writes)
+# - .eyediff/difference/   (writes on mismatch)
+```
+
+### Service API
+
+| Endpoint | Method | Input | Description |
+|----------|--------|-------|-------------|
+| `/health` | GET | - | Health check |
+| `/compare` | POST | `{ name, pdf?, url? }` | Render + compare against reference |
+| `/update` | POST | `{ name, pdf?, url? }` | Render + save as new reference |
+| `/approve` | POST | `{ name }` | Copy current → reference |
+| `/approve-all` | POST | - | Approve all pending |
+| `/status` | GET | - | List pending diffs |
+
+### Compare Flow
+
+```
+POST /compare { name: "invoice", pdf: <base64> }
+
+Service:
+1. Render PDF via Chrome → PNG
+2. Save to .eyediff/current/invoice.png
+3. Load .eyediff/reference/invoice.png
+4. Compare images (Docker diff)
+5. If mismatch: write .eyediff/difference/invoice.png
+6. Return { match: false, score: 0.0042 }
+```
+
+### JavaScript Client
+
+Lightweight client (~50 lines, no native deps):
+
+```javascript
+// @eyediff/client
+import { compare, update, approve } from '@eyediff/client';
+
+// Compare PDF against snapshot
+const result = await compare({
+  name: 'invoice',
+  pdf: pdfBuffer
+});
+// { match: true, score: 0 }
+
+// Compare URL (Storybook story, any webpage)
+const result = await compare({
+  name: 'button-primary',
+  url: 'http://localhost:6006/iframe.html?id=button--primary'
+});
+
+// Update reference
+await update({ name: 'invoice', pdf: pdfBuffer });
+
+// Approve pending change
+await approve({ name: 'invoice' });
+```
+
+### Jest Integration
+
+```javascript
+// @eyediff/jest
+import { toMatchSnapshot } from '@eyediff/jest';
+expect.extend({ toMatchSnapshot });
+
+test('invoice renders correctly', async () => {
+  const pdf = await generateInvoice();
+
+  // Name auto-derived from test name
+  // Calls service internally
+  await expect(pdf).toMatchSnapshot();
+});
+
+test('button primary', async () => {
+  // Works with URLs too
+  await expect('http://localhost:6006/iframe.html?id=button--primary')
+    .toMatchSnapshot();
+});
+```
+
+### Workflow
+
+```bash
+# 1. Start service (once)
+eyediff service start
+
+# 2. Run tests (many compare calls, fast)
+npm test
+
+# 3. Review failures
+eyediff review
+
+# 4. Approve or fix
+eyediff approve invoice
+eyediff approve --all
+
+# 5. Stop service
+eyediff service stop
+```
+
+### CLI Commands (Service)
+
+| Command | Description |
+|---------|-------------|
+| `eyediff service start` | Start long-running service |
+| `eyediff service stop` | Stop service |
+| `eyediff service status` | Check if running, show pending diffs |
+
+### Packages
+
+| Package | Description |
+|---------|-------------|
+| `eyediff` | Rust CLI (npm binary distribution) |
+| `@eyediff/client` | JS client for service API |
+| `@eyediff/jest` | Jest matchers |
+| `@eyediff/vitest` | Vitest matchers (future) |
+
+### Benefits
+
+| Benefit | Explanation |
+|---------|-------------|
+| **Fast assertions** | HTTP call vs container startup per test |
+| **Consistent rendering** | Chrome (Docker) renders PDFs + URLs |
+| **Consistent diffs** | Same diff container for all comparisons |
+| **Unified workflow** | Same `eyediff review` for Storybook + PDFs |
+| **Light JS client** | No native dependencies in test code |
 
 ## Extensibility
 
