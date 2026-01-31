@@ -225,9 +225,11 @@ Content-Type: application/json
 | `merge` | `true`: single PNG (stacked), `false`: per-page PNGs |
 
 **Response when `merge: true` (default):**
+
 - Single PNG with all pages vertically stacked
 
 **Response when `merge: false`:**
+
 ```json
 {
   "pages": [
@@ -326,7 +328,54 @@ Crop to `<body>` bounding box, not full viewport. This handles varying component
 
 ## Image Comparison
 
-Using [dssim](https://github.com/kornelski/dssim) for perceptual diff:
+### Diff Pipeline (Optimized)
+
+Three-phase approach to minimize Docker calls:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Phase 1: Hash Compare (instant)                             │
+│ SHA-256(current) == SHA-256(reference)?                     │
+│ ├── Match → DONE (unchanged)                                │
+│ └── Differ → Phase 2                                        │
+├─────────────────────────────────────────────────────────────┤
+│ Phase 2: Fast Pixel Check (in-process, ~5ms)                │
+│ Decode PNGs, compare raw pixels                             │
+│ ├── Match → DONE (same pixels, different encoding)          │
+│ └── Differ → Phase 3                                        │
+├─────────────────────────────────────────────────────────────┤
+│ Phase 3: Full Diff (Docker, ~50ms)                          │
+│ Run diff engine, generate score + diff image                │
+│ └── Return { score, diff.png }                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Why this helps:**
+
+| Scenario | Without optimization | With optimization |
+|----------|---------------------|-------------------|
+| 100 unchanged (same hash) | 100 Docker calls | 0 Docker calls |
+| 100 unchanged (re-encoded PNG) | 100 Docker calls | 0 Docker calls |
+| 95 unchanged, 5 changed | 100 Docker calls | 5 Docker calls |
+
+**Fast pixel check (Rust, in-process):**
+
+```rust
+fn pixels_identical(reference: &Path, current: &Path) -> Result<bool> {
+    let ref_img = image::open(reference)?;
+    let cur_img = image::open(current)?;
+
+    if ref_img.dimensions() != cur_img.dimensions() {
+        return Ok(false);
+    }
+
+    Ok(ref_img.as_bytes() == cur_img.as_bytes())
+}
+```
+
+### Diff Engine
+
+Using [dssim](https://github.com/kornelski/dssim) for perceptual diff (in Docker):
 
 ```bash
 dssim -o diff.png reference.png current.png
@@ -340,27 +389,116 @@ dssim -o diff.png reference.png current.png
 
 ```
 .eyediff/
-├── config.toml          # Configuration (committed)
-├── .gitignore           # Ignore transient files
-├── reference/           # Baseline screenshots (committed)
-│   ├── chrome_laptop_Button_Primary.png
-│   └── chrome_laptop_Button_Secondary.png
-├── current/             # Current test run (ignored)
-│   └── ...
-├── difference/          # Diff images (ignored)
-│   └── ...
-└── report.html          # Visual comparison report (ignored)
+├── config.toml
+├── .gitignore
+├── snapshots/
+│   │
+│   │ # Single-image snapshots (web, merged PDF)
+│   ├── button-primary/
+│   │   ├── reference.png        # Baseline (committed)
+│   │   ├── current.png          # Current run (ignored)
+│   │   └── diff.png             # Difference (ignored)
+│   │
+│   │ # Per-page snapshots (multi-page PDF)
+│   ├── invoice/
+│   │   ├── manifest.json        # Metadata (committed)
+│   │   ├── reference/           # Baseline pages (committed)
+│   │   │   ├── page-001.png
+│   │   │   └── page-002.png
+│   │   ├── current/             # Current run (ignored)
+│   │   │   ├── page-001.png
+│   │   │   └── page-002.png
+│   │   └── diff/                # Differences (ignored)
+│   │       └── page-002.png
+│   │
+└── report.html                  # Visual comparison report (ignored)
+```
+
+### Manifest (Per-Page Snapshots)
+
+Per-page snapshots include a `manifest.json` for metadata and change detection:
+
+```json
+{
+  "schemaVersion": 1,
+  "snapshotName": "invoice",
+  "snapshotMode": "per-page",
+  "hashAlgorithm": "sha256",
+  "lastUpdated": "2024-01-15T10:30:00Z",
+  "source": {
+    "dpi": 144
+  },
+  "pages": [
+    { "page": 1, "hash": "a1b2c3...", "width": 1700, "height": 2200 },
+    { "page": 2, "hash": "d4e5f6...", "width": 1700, "height": 2200 }
+  ]
+}
+```
+
+Benefits:
+
+- **Fast change detection** via hash comparison (skip full image diff if unchanged)
+- **Page count tracking** (detect added/removed pages)
+- **Dimension tracking** (detect layout changes)
+
+### Page Count Changes
+
+When PDF page count changes between reference and current:
+
+| Scenario         | Handling                                                                      |
+| ---------------- | ----------------------------------------------------------------------------- |
+| **Page added**   | Create synthetic diff with teal banner: "New page X (not in reference)"       |
+| **Page removed** | Create synthetic diff with amber banner: "Missing page X (in reference only)" |
+| **Same count**   | Normal image comparison                                                       |
+
+Synthetic diff example:
+
+```
+┌─────────────────────────────────┐
+│  ████ NEW PAGE 3 ████           │  ← Teal (#1ABC9C)
+│  (not in reference)             │
+│                                 │
+│  [Current page image below]     │
+│                                 │
+└─────────────────────────────────┘
+```
+
+### Filename Padding
+
+Zero-padded page numbers for correct sorting:
+
+| Page Count    | Format         |
+| ------------- | -------------- |
+| 1-9 pages     | `page-1.png`   |
+| 10-99 pages   | `page-01.png`  |
+| 100-999 pages | `page-001.png` |
+
+Padding adjusts when page count crosses digit boundaries.
+
+### Atomic Writes
+
+All file writes use atomic operations (temp file + rename) to prevent partial artifacts:
+
+```rust
+// Write to temp file first
+let temp = path.with_extension("tmp");
+fs::write(&temp, data)?;
+
+// Atomic rename
+fs::rename(&temp, &path)?;
 ```
 
 ### Git Strategy
 
-Reference screenshots are committed; transient files are ignored.
+Reference snapshots are committed; transient files are ignored.
 
 `.eyediff/.gitignore`:
 
 ```
-current/
-difference/
+**/current/
+**/current.png
+**/diff/
+**/diff.png
 report.html
 ```
 
@@ -372,7 +510,7 @@ report.html
 $ eyediff init
 Created .eyediff/
 Created .eyediff/config.toml
-Created .eyediff/reference/
+Created .eyediff/snapshots/
 Created .eyediff/.gitignore
 Ready! Run 'eyediff update' to capture initial screenshots.
 ```
@@ -836,29 +974,45 @@ eyediff service start
 
 ### Service API
 
-| Endpoint       | Method | Input                         | Description                        |
-| -------------- | ------ | ----------------------------- | ---------------------------------- |
-| `/health`      | GET    | -                             | Health check                       |
-| `/compare/web` | POST   | `{ name, url, viewport }`     | Screenshot URL + compare           |
-| `/compare/pdf` | POST   | `{ name, pdf, dpi?, pages?, merge? }` | Screenshot PDF + compare     |
-| `/update/web`  | POST   | `{ name, url, viewport }`     | Screenshot URL + save as reference |
-| `/update/pdf`  | POST   | `{ name, pdf, dpi?, pages? }` | Screenshot PDF + save as reference |
-| `/approve`     | POST   | `{ name }`                    | Copy current → reference           |
-| `/approve-all` | POST   | -                             | Approve all pending                |
-| `/status`      | GET    | -                             | List pending diffs                 |
+| Endpoint       | Method | Input                                 | Description                        |
+| -------------- | ------ | ------------------------------------- | ---------------------------------- |
+| `/health`      | GET    | -                                     | Health check                       |
+| `/compare/web` | POST   | `{ name, url, viewport }`             | Screenshot URL + compare           |
+| `/compare/pdf` | POST   | `{ name, pdf, dpi?, pages?, merge? }` | Screenshot PDF + compare           |
+| `/update/web`  | POST   | `{ name, url, viewport }`             | Screenshot URL + save as reference |
+| `/update/pdf`  | POST   | `{ name, pdf, dpi?, pages? }`         | Screenshot PDF + save as reference |
+| `/approve`     | POST   | `{ name }`                            | Copy current → reference           |
+| `/approve-all` | POST   | -                                     | Approve all pending                |
+| `/status`      | GET    | -                                     | List pending diffs                 |
 
 ### Compare Flow
 
-```
-POST /compare { name: "invoice", pdf: <base64> }
+**Single-image (web, merged PDF):**
 
-Service:
-1. Render PDF via Chrome → PNG
-2. Save to .eyediff/current/invoice.png
-3. Load .eyediff/reference/invoice.png
-4. Compare images (Docker diff)
-5. If mismatch: write .eyediff/difference/invoice.png
-6. Return { match: false, score: 0.0042 }
+```
+POST /compare/web { name: "button-primary", url, viewport }
+
+1. Screenshot URL → PNG
+2. Save to snapshots/button-primary/current.png
+3. Compare with snapshots/button-primary/reference.png
+4. If mismatch: write diff.png
+5. Return { match: false, score: 0.0042 }
+```
+
+**Per-page (PDF with merge: false):**
+
+```
+POST /compare/pdf { name: "invoice", pdf, merge: false }
+
+1. Render PDF → page PNGs
+2. Load manifest.json (page hashes, count)
+3. For each page:
+   a. Compute hash, compare with manifest
+   b. If hash matches → skip (fast path)
+   c. If hash differs → full image diff
+4. Handle page count changes (added/removed)
+5. Update manifest with new hashes
+6. Return { match: false, pages: [...] }
 ```
 
 ### JavaScript Client
@@ -891,8 +1045,17 @@ const result = await comparePdf({
   pdf: pdfBuffer,
   merge: false,
 });
-// Creates: report-page-1.png, report-page-2.png, etc.
-// { match: false, pages: [{ page: 1, match: true }, { page: 2, match: false }] }
+// Result:
+// {
+//   match: false,
+//   pages: [
+//     { page: 1, match: true, skipped: true },      // Hash unchanged, skipped
+//     { page: 2, match: false, score: 0.0012 },     // Changed, diff generated
+//     { page: 3, status: 'added' },                 // New page in current
+//   ],
+//   pagesAdded: 1,
+//   pagesRemoved: 0
+// }
 
 // Approve pending change
 await approve({ name: 'invoice' });
