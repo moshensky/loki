@@ -6,11 +6,12 @@ Opinionated visual regression testing for Storybook 10+.
 
 ## Design Principles
 
-1. **Docker-first** - Workers run in containers for consistency
-2. **Storybook 10 only** - No legacy API support
-3. **Zero configuration** - Sensible defaults, minimal setup
-4. **Fast** - Parallel workers, native diff tools
-5. **Pluggable** - Simple worker protocol enables alternative backends
+1. **Rust + MIT** - Single binary CLI, permissive license
+2. **Docker-first** - Screenshots and diffs run in containers for cross-platform consistency
+3. **Storybook 10 only** - No legacy API support
+4. **Zero configuration** - Sensible defaults, minimal setup
+5. **Fast** - Parallel workers, native tools
+6. **Pluggable** - Simple protocols enable alternative backends
 
 ## Architecture
 
@@ -74,43 +75,61 @@ Alternative diff engines (same protocol):
 
 ## Modules
 
-### CLI (npm package: `eyediff`)
+### CLI (Rust binary, MIT license)
 
-| Module        | Responsibility                             |
+| Crate/Module  | Responsibility                             |
 | ------------- | ------------------------------------------ |
-| `cli`         | Command parsing, entry point               |
-| `config`      | Load from .eyediff/config.js               |
+| `cli`         | Command parsing (clap)                     |
+| `config`      | Load from .eyediff/config.toml             |
 | `stories`     | Fetch and filter stories from Storybook    |
 | `turbosnap`   | Detect changed stories via git diff        |
-| `worker-pool` | Spawn, manage, and distribute tasks        |
-| `diff`        | Compare screenshots using dssim            |
+| `docker`      | Spawn and manage containers (bollard)      |
+| `worker_pool` | Distribute tasks to workers                |
 | `reporter`    | Terminal output and HTML report generation |
+| `review`      | Local HTTP server for interactive review   |
 
-### Worker (Docker image)
+### Screenshot Worker (Rust binary in Docker)
 
-| Module       | Responsibility                        |
-| ------------ | ------------------------------------- |
-| `server`     | HTTP endpoint for screenshot requests |
-| `browser`    | Chrome CDP connection and management  |
-| `screenshot` | Navigate, wait for ready, capture     |
+| Module       | Responsibility                    |
+| ------------ | --------------------------------- |
+| `server`     | HTTP endpoint (axum)              |
+| `browser`    | Chrome CDP (chromiumoxide)        |
+| `screenshot` | Navigate, wait for ready, capture |
+
+### Diff Container (Docker, license varies by engine)
+
+| Module | Responsibility                  |
+| ------ | ------------------------------- |
+| `diff` | Compare images, output scores   |
+| `cli`  | Parse args, process directories |
 
 ## Dependencies
 
-> **Note:** All external tools and dependencies listed below are examples. Final choices will be researched and selected based on the finalized specification and architecture.
+> **Note:** All crates listed below are examples. Final choices will be researched and selected based on the finalized architecture.
 
-### CLI
+### CLI (Rust)
 
-| Dependency  | Purpose                              |
-| ----------- | ------------------------------------ |
-| `dssim`     | Perceptual image diff (prebuilt bin) |
-| `dockerode` | Spawn and manage Docker containers   |
+| Crate     | Purpose                     | License |
+| --------- | --------------------------- | ------- |
+| `clap`    | Command line parsing        | MIT     |
+| `tokio`   | Async runtime               | MIT     |
+| `bollard` | Docker API client           | Apache  |
+| `reqwest` | HTTP client                 | MIT     |
+| `axum`    | HTTP server (for review UI) | MIT     |
+| `serde`   | Serialization               | MIT     |
+| `toml`    | Config parsing              | MIT     |
 
-### Worker
+### Screenshot Worker (Rust)
 
-| Dependency                | Purpose           |
-| ------------------------- | ----------------- |
-| `chromium`                | Headless browser  |
-| `puppeteer-core` or `cri` | CDP communication |
+| Crate           | Purpose                  | License |
+| --------------- | ------------------------ | ------- |
+| `axum`          | HTTP server              | MIT     |
+| `chromiumoxide` | Chrome DevTools Protocol | MIT     |
+| `tokio`         | Async runtime            | MIT     |
+
+### Diff Container
+
+Engine-specific, see Pluggable Engines section.
 
 ## Protocols
 
@@ -212,57 +231,34 @@ http://host.docker.internal:6006/iframe.html?id={storyId}&viewMode=story
 
 Wait until all conditions are met:
 
-```javascript
-await Promise.all([
-  // Network idle (no pending requests for 500ms)
-  page.waitForNetworkIdle({ idleTime: 500 }),
-
-  // Fonts loaded
-  page.evaluate(() => document.fonts.ready),
-
-  // No pending CSS animations
-  page.evaluate(() => getComputedStyle(document.body).animationName === 'none'),
-]);
-
-// Additional quiet period (DOM mutations settled)
-await waitForDomStable(page, { timeout: 1000 });
-```
+1. Network idle (no pending requests for 500ms)
+2. Fonts loaded (`document.fonts.ready`)
+3. DOM stable (no mutations for 100ms)
 
 ### Screenshot Cropping
 
-Crop to `<body>` bounding box instead of fixed selector:
+Crop to `<body>` bounding box, not full viewport. This handles varying component sizes.
 
-```javascript
-const box = await page.evaluate(() => {
-  const body = document.body;
-  const rect = body.getBoundingClientRect();
-  return {
-    x: rect.x,
-    y: rect.y,
-    width: rect.width,
-    height: rect.height,
-  };
-});
+### Injected Styles
 
-await page.screenshot({ clip: box });
-```
-
-This handles varying component sizes without requiring a specific selector.
-
-### Injected Scripts
-
-```javascript
-// Disable CSS animations/transitions
-*, :before, :after {
+```css
+/* Disable CSS animations/transitions */
+*,
+*::before,
+*::after {
   transition: none !important;
   animation: none !important;
 }
 
-// Disable pointer events (prevent hover states)
-* { pointer-events: none !important; }
+/* Disable pointer events (prevent hover states) */
+* {
+  pointer-events: none !important;
+}
 
-// Hide input carets
-* { caret-color: transparent !important; }
+/* Hide input carets */
+* {
+  caret-color: transparent !important;
+}
 ```
 
 ## Image Comparison
@@ -281,7 +277,7 @@ dssim -o diff.png reference.png current.png
 
 ```
 .eyediff/
-├── config.js            # Configuration (committed)
+├── config.toml          # Configuration (committed)
 ├── .gitignore           # Ignore transient files
 ├── reference/           # Baseline screenshots (committed)
 │   ├── chrome_laptop_Button_Primary.png
@@ -312,7 +308,7 @@ report.html
 ```bash
 $ eyediff init
 Created .eyediff/
-Created .eyediff/config.js
+Created .eyediff/config.toml
 Created .eyediff/reference/
 Created .eyediff/.gitignore
 Ready! Run 'eyediff update' to capture initial screenshots.
@@ -320,38 +316,77 @@ Ready! Run 'eyediff update' to capture initial screenshots.
 
 ## Configuration
 
-Config in `.eyediff/config.js`:
+Config in `.eyediff/config.toml`:
 
-```javascript
-export default {
-  storybookUrl: 'http://localhost:6006',
-  concurrency: 4,
-  diffThreshold: 0,
-  viewports: {
-    desktop: {
-      width: 1366,
-      height: 768,
-    },
-    mobile: {
-      width: 375,
-      height: 667,
-      deviceScaleFactor: 2,
-    },
-  },
-};
+```toml
+storybook_url = "http://localhost:6006"
+concurrency = 4
+diff_engine = "dssim"
+
+[viewports.desktop]
+width = 1366
+height = 768
+
+[viewports.mobile]
+width = 375
+height = 667
+device_scale_factor = 2
+
+[engine_options.dssim]
+threshold = 0.0001
+
+[engine_options.pixelmatch]
+threshold = 0.1
+include_aa = false
 ```
 
 ### Options
 
-| Option          | Default                 | Description                              |
-| --------------- | ----------------------- | ---------------------------------------- |
-| `storybookUrl`  | `http://localhost:6006` | Storybook server URL                     |
-| `concurrency`   | `4`                     | Number of parallel workers               |
-| `diffThreshold` | `0`                     | Acceptable dssim score (0 = exact match) |
-| `viewports`     | `{ desktop: {...} }`    | Viewport configurations                  |
-| `referenceDir`  | `.eyediff/reference`    | Baseline screenshots                     |
-| `currentDir`    | `.eyediff/current`      | Current run screenshots                  |
-| `diffDir`       | `.eyediff/diff`         | Diff images                              |
+| Option           | Default                 | Description                |
+| ---------------- | ----------------------- | -------------------------- |
+| `storybook_url`  | `http://localhost:6006` | Storybook server URL       |
+| `concurrency`    | `4`                     | Number of parallel workers |
+| `diff_engine`    | `dssim`                 | Diff engine to use         |
+| `viewports`      | `{ desktop: {...} }`    | Viewport configurations    |
+| `engine_options` | `{}`                    | Per-engine configuration   |
+
+## Installation
+
+### npm (recommended for Storybook projects)
+
+```bash
+npm install -D eyediff
+```
+
+Uses platform-specific packages with prebuilt Rust binaries:
+
+```
+eyediff
+├── optionalDependencies:
+│   ├── @eyediff/cli-darwin-arm64
+│   ├── @eyediff/cli-darwin-x64
+│   ├── @eyediff/cli-linux-x64
+│   └── @eyediff/cli-win32-x64
+```
+
+### Standalone
+
+```bash
+# macOS
+brew install eyediff
+
+# Linux
+curl -fsSL https://eyediff.dev/install.sh | sh
+
+# Cargo
+cargo install eyediff
+```
+
+### Requirements
+
+- Docker (for screenshot workers and diff containers)
+
+Docker images are pulled automatically on first run.
 
 ## CLI Commands
 
@@ -485,36 +520,40 @@ The HTML report is a single file with:
 
 This allows easy sharing and viewing without a web server.
 
-## Worker Docker Image
+## Docker Images
 
-Published to `ghcr.io/oblador/eyediff-worker`. Contains Chrome and HTTP screenshot service.
+### Screenshot Worker
+
+Contains Rust binary + Chrome. Minimal image size (no Node.js runtime).
 
 ```dockerfile
-FROM node:24
+FROM debian:bookworm-slim
 
-# Install Chrome
+# Install Chrome and fonts
 RUN apt-get update && apt-get install -y \
     chromium \
     fonts-liberation \
-    libasound2 \
-    libatk-bridge2.0-0 \
-    libdrm2 \
-    libgbm1 \
-    libgtk-3-0 \
-    libnspr4 \
-    libnss3 \
-    libxss1 \
-    xdg-utils \
+    fonts-noto-color-emoji \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy worker source
-WORKDIR /app
-COPY worker/src ./src
-COPY worker/package.json .
-RUN npm install --production
+# Copy pre-built Rust binary
+COPY target/release/eyediff-worker /usr/local/bin/
 
 EXPOSE 3000
-ENTRYPOINT ["node", "/app/src/server.js"]
+ENTRYPOINT ["eyediff-worker"]
+```
+
+### Diff Container (dssim example)
+
+```dockerfile
+FROM rust:alpine AS builder
+RUN cargo install dssim
+
+FROM alpine:latest
+COPY --from=builder /usr/local/cargo/bin/dssim /usr/local/bin/
+COPY target/release/eyediff-diff /usr/local/bin/
+
+ENTRYPOINT ["eyediff-diff"]
 ```
 
 ### Image Comparison
@@ -562,34 +601,50 @@ Separate Docker images per engine (avoids license conflicts):
 
 All images implement the same protocol - only the comparison algorithm differs.
 
-Configure in `.eyediff/config.js`:
+Configure engine in `.eyediff/config.toml` (see Configuration section).
 
-```javascript
-export default {
-  diffEngine: 'dssim',
+## Project Structure
 
-  // Engine-specific options
-  engineOptions: {
-    dssim: {
-      threshold: 0.0001,
-    },
-    pixelmatch: {
-      threshold: 0.1,
-      includeAA: false, // ignore antialiasing
-    },
-    imagemagick: {
-      metric: 'AE', // absolute error count
-      fuzz: '5%',
-    },
-    looksSame: {
-      tolerance: 5,
-      antialiasingTolerance: 3,
-    },
-  },
-};
+```
+eyediff/
+├── Cargo.toml              # Workspace
+├── crates/
+│   ├── eyediff/            # CLI binary
+│   │   ├── Cargo.toml
+│   │   └── src/
+│   │       ├── main.rs
+│   │       ├── cli.rs
+│   │       ├── config.rs
+│   │       ├── stories.rs
+│   │       ├── docker.rs
+│   │       ├── worker_pool.rs
+│   │       ├── reporter.rs
+│   │       └── review.rs
+│   └── eyediff-worker/     # Screenshot worker binary
+│       ├── Cargo.toml
+│       └── src/
+│           ├── main.rs
+│           ├── server.rs
+│           └── screenshot.rs
+├── docker/
+│   ├── worker/
+│   │   └── Dockerfile
+│   └── diff/
+│       ├── dssim/
+│       │   └── Dockerfile
+│       └── pixelmatch/
+│           └── Dockerfile
+└── web/                    # Review UI (static HTML/CSS/JS)
+    └── index.html
 ```
 
-Only the selected engine's options are used.
+## Exit Codes
+
+| Code | Meaning                               |
+| ---- | ------------------------------------- |
+| 0    | All tests passed                      |
+| 1    | Visual differences detected           |
+| 2    | Error (config, Docker, network, etc.) |
 
 ## Future: Alternative Workers
 
@@ -604,4 +659,9 @@ Potential workers:
 - **AWS Lambda** - Serverless, scales to thousands
 - **Browserstack/Sauce Labs** - Real browsers, cross-browser testing
 - **Local Chrome** - No Docker, direct CDP connection
-- **Playwright Service** - Microsoft's cloud browsers
+
+## Out of Scope
+
+- Storybook < 10
+- React Native / mobile apps
+- Non-Docker local execution (for now)
