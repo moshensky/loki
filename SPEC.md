@@ -64,15 +64,15 @@ Alternative workers (same protocol):
 
 ### CLI (npm package: `eyediff`)
 
-| Module        | Responsibility                              |
-| ------------- | ------------------------------------------- |
-| `cli`         | Command parsing, entry point                |
-| `config`      | Load from package.json or eyediff.config.js |
-| `stories`     | Fetch and filter stories from Storybook     |
-| `turbosnap`   | Detect changed stories via git diff         |
-| `worker-pool` | Spawn, manage, and distribute tasks         |
-| `diff`        | Compare screenshots using dssim             |
-| `reporter`    | Output results to terminal                  |
+| Module        | Responsibility                             |
+| ------------- | ------------------------------------------ |
+| `cli`         | Command parsing, entry point               |
+| `config`      | Load from .eyediff/config.js               |
+| `stories`     | Fetch and filter stories from Storybook    |
+| `turbosnap`   | Detect changed stories via git diff        |
+| `worker-pool` | Spawn, manage, and distribute tasks        |
+| `diff`        | Compare screenshots using dssim            |
+| `reporter`    | Terminal output and HTML report generation |
 
 ### Worker (Docker image)
 
@@ -88,11 +88,10 @@ Alternative workers (same protocol):
 
 ### CLI
 
-| Dependency    | Purpose                              |
-| ------------- | ------------------------------------ |
-| `dssim`       | Perceptual image diff (prebuilt bin) |
-| `dockerode`   | Spawn and manage Docker containers   |
-| `cosmiconfig` | Load configuration                   |
+| Dependency  | Purpose                              |
+| ----------- | ------------------------------------ |
+| `dssim`     | Perceptual image diff (prebuilt bin) |
+| `dockerode` | Spawn and manage Docker containers   |
 
 ### Worker
 
@@ -279,39 +278,65 @@ dssim -o diff.png reference.png current.png
 
 ```
 .eyediff/
-├── reference/           # Baseline screenshots
+├── config.js            # Configuration (committed)
+├── .gitignore           # Ignore transient files
+├── reference/           # Baseline screenshots (committed)
 │   ├── chrome_laptop_Button_Primary.png
 │   └── chrome_laptop_Button_Secondary.png
-├── current/             # Current test run
+├── current/             # Current test run (ignored)
 │   └── ...
-└── difference/          # Diff images (on failure)
-    └── ...
+├── difference/          # Diff images (ignored)
+│   └── ...
+└── report.html          # Visual comparison report (ignored)
+```
+
+### Git Strategy
+
+Reference screenshots are committed; transient files are ignored.
+
+`.eyediff/.gitignore`:
+
+```
+current/
+difference/
+report.html
+```
+
+### Init Command
+
+`eyediff init` creates the directory structure, gitignore, and config:
+
+```bash
+$ eyediff init
+Created .eyediff/
+Created .eyediff/config.js
+Created .eyediff/reference/
+Created .eyediff/.gitignore
+Ready! Run 'eyediff update' to capture initial screenshots.
 ```
 
 ## Configuration
 
-Config in `package.json` or `eyediff.config.js`:
+Config in `.eyediff/config.js`:
 
-```json
-{
-  "eyediff": {
-    "storybookUrl": "http://localhost:6006",
-    "concurrency": 4,
-    "diffThreshold": 0,
-    "viewports": {
-      "desktop": {
-        "width": 1366,
-        "height": 768
-      },
-      "mobile": {
-        "width": 375,
-        "height": 667,
-        "mobile": true,
-        "deviceScaleFactor": 2
-      }
-    }
-  }
-}
+```javascript
+export default {
+  storybookUrl: 'http://localhost:6006',
+  concurrency: 4,
+  diffThreshold: 0,
+  viewports: {
+    desktop: {
+      width: 1366,
+      height: 768,
+    },
+    mobile: {
+      width: 375,
+      height: 667,
+      mobile: true,
+      deviceScaleFactor: 2,
+    },
+  },
+};
 ```
 
 ### Options
@@ -328,13 +353,14 @@ Config in `package.json` or `eyediff.config.js`:
 
 ## CLI Commands
 
-| Command                              | Description                                |
-| ------------------------------------ | ------------------------------------------ |
-| `eyediff test`                       | Run tests, compare against references      |
-| `eyediff test --changed-since <ref>` | Only test stories affected by git changes  |
-| `eyediff test --storybook-dir <dir>` | Use static build instead of live server    |
-| `eyediff update`                     | Capture new reference screenshots          |
-| `eyediff approve`                    | Copy current to reference (accept changes) |
+| Command                              | Description                                 |
+| ------------------------------------ | ------------------------------------------- |
+| `eyediff init`                       | Initialize project (create dirs, gitignore) |
+| `eyediff test`                       | Run tests, compare against references       |
+| `eyediff test --changed-since <ref>` | Only test stories affected by git changes   |
+| `eyediff test --storybook-dir <dir>` | Use static build instead of live server     |
+| `eyediff update`                     | Capture new reference screenshots           |
+| `eyediff approve`                    | Copy current to reference (accept changes)  |
 
 ## Incremental Testing (TurboSnap-style)
 
@@ -419,6 +445,58 @@ class WorkerPool {
 | 0    | All tests passed                              |
 | 1    | Visual differences detected                   |
 | 2    | Error (stories not found, Chrome crash, etc.) |
+
+## HTML Report
+
+After each test run, eyediff generates an HTML report for visual comparison:
+
+```
+.eyediff/report.html
+```
+
+### Features
+
+| Feature              | Description                                        |
+| -------------------- | -------------------------------------------------- |
+| **Side-by-side**     | Reference, current, and diff images in columns     |
+| **Overlay toggle**   | Switch between side-by-side and overlay comparison |
+| **Filter by status** | Show all / failures only / passed only             |
+| **Keyboard nav**     | Arrow keys to navigate between stories             |
+| **Approve inline**   | One-click approve individual changes               |
+| **Search**           | Filter stories by name                             |
+
+### Layout
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ eyediff Report                          [All] [Failed] [Passed] │
+├─────────────────────────────────────────────────────────────────┤
+│ Search: [________________]                                      │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│ ✗ Button/Primary (desktop)                          [Approve]   │
+│ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐                 │
+│ │  Reference  │ │   Current   │ │    Diff     │                 │
+│ │             │ │             │ │             │                 │
+│ └─────────────┘ └─────────────┘ └─────────────┘                 │
+│                                                                 │
+│ ✓ Button/Secondary (desktop)                                    │
+│ ┌─────────────┐ ┌─────────────┐                                 │
+│ │  Reference  │ │   Current   │  (no diff - identical)          │
+│ └─────────────┘ └─────────────┘                                 │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Self-contained
+
+The HTML report is a single file with:
+
+- Embedded CSS (no external stylesheets)
+- Inline images (base64 encoded)
+- Vanilla JS (no framework dependencies)
+
+This allows easy sharing and viewing without a web server.
 
 ## Worker Docker Image
 
