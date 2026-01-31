@@ -785,6 +785,31 @@ The simple protocols enable alternative implementations:
 
 **Note:** WASM diffs only make sense if non-Docker screenshots are added. If Docker is already required, Docker diffs are faster.
 
+### Remote Worker URL Access (Future)
+
+Remote workers (Lambda, Browserstack) cannot access `localhost`. Solutions:
+
+| Scenario                                    | Resolution                         |
+| ------------------------------------------- | ---------------------------------- |
+| `storybook_url` is public                   | Use directly                       |
+| `storybook_url` is localhost + static build | Upload to S3/temp hosting          |
+| `storybook_url` is localhost + dev server   | Require public URL or static build |
+
+CLI resolves URL before passing to backend:
+
+```rust
+impl ScreenshotBackend for LambdaBackend {
+    async fn start(&self, config: WorkerConfig) -> Result<()> {
+        // config.storybook_url already resolved:
+        // - "http://localhost:6006" → error or auto-upload static
+        // - "https://staging.example.com" → use directly
+        // - static build → uploaded to S3, URL provided
+    }
+}
+```
+
+Design constraint: backends receive **resolved URLs**, not raw config. URL resolution happens in CLI before spawning workers.
+
 ### Local Chrome Detection (Future)
 
 When local Chrome backend is added, detection order:
