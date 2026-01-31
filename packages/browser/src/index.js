@@ -1,6 +1,5 @@
 const awaitLokiReady = require('./await-loki-ready');
 const awaitSelectorPresent = require('./await-selector-present');
-const createStorybookConfigurator = require('./configure-storybook');
 const disableAnimations = require('./disable-animations');
 const disableInputCaret = require('./disable-input-caret');
 const disablePointerEvents = require('./disable-pointer-events');
@@ -14,7 +13,6 @@ const setLokiTestAttribute = require('./set-loki-test-attribute');
 module.exports = {
   awaitLokiReady,
   awaitSelectorPresent,
-  createStorybookConfigurator,
   disableAnimations,
   disableInputCaret,
   disablePointerEvents,
