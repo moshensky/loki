@@ -732,7 +732,7 @@ eyediff/
 | 1    | Visual differences detected           |
 | 2    | Error (config, Docker, network, etc.) |
 
-## Future: Alternative Workers
+## Future Considerations
 
 The worker protocol is simple enough to implement anywhere:
 
@@ -740,14 +740,14 @@ The worker protocol is simple enough to implement anywhere:
 POST /screenshot { url, viewport } → 200 <PNG bytes>
 ```
 
-Potential workers:
+Potential alternative workers (not in initial release):
 
 - **AWS Lambda** - Serverless, scales to thousands
 - **Browserstack/Sauce Labs** - Real browsers, cross-browser testing
-- **Local Chrome** - No Docker, direct CDP connection
+- **Local Chrome** - No Docker, direct CDP connection (for faster local dev)
 
-## Out of Scope
+## Out of Scope (Initial Release)
 
 - Storybook < 10
 - React Native / mobile apps
-- Non-Docker local execution (for now)
+- Non-Docker workers (Docker required for cross-platform consistency)
