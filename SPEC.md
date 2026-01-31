@@ -360,7 +360,8 @@ export default {
 | `eyediff test --changed-since <ref>` | Only test stories affected by git changes   |
 | `eyediff test --storybook-dir <dir>` | Use static build instead of live server     |
 | `eyediff update`                     | Capture new reference screenshots           |
-| `eyediff approve`                    | Copy current to reference (accept changes)  |
+| `eyediff approve [story-id]`         | Copy current to reference (accept changes)  |
+| `eyediff review`                     | Interactive review UI (see below)           |
 
 ## Incremental Testing (TurboSnap-style)
 
@@ -446,9 +447,49 @@ class WorkerPool {
 | 1    | Visual differences detected                   |
 | 2    | Error (stories not found, Chrome crash, etc.) |
 
-## HTML Report
+## Interactive Review
 
-After each test run, eyediff generates an HTML report for visual comparison:
+`eyediff review` launches an interactive UI for reviewing and approving changes:
+
+```bash
+$ eyediff review
+Starting review server on http://localhost:4040
+Opening browser...
+
+Press Ctrl+C to exit
+```
+
+### How It Works
+
+1. CLI starts local HTTP server on available port
+2. Opens browser to review UI
+3. UI communicates with server via HTTP/WebSocket
+4. Approve actions trigger file operations on server
+5. Server exits on Ctrl+C or when browser tab closes
+
+### Server Endpoints
+
+| Endpoint                  | Method | Description                         |
+| ------------------------- | ------ | ----------------------------------- |
+| `/`                       | GET    | Serve review UI                     |
+| `/api/stories`            | GET    | List all stories with status        |
+| `/api/images/:type/:name` | GET    | Serve reference/current/diff images |
+| `/api/approve/:story-id`  | POST   | Copy current → reference for story  |
+| `/api/approve-all`        | POST   | Approve all pending changes         |
+| `/ws`                     | WS     | Live updates when files change      |
+
+### UI Actions
+
+| Action            | Effect                                      |
+| ----------------- | ------------------------------------------- |
+| **[Approve]**     | POST to server, updates reference instantly |
+| **[Approve All]** | Approves all failures, refreshes UI         |
+| **[Reject]**      | Deletes current screenshot                  |
+| **Close tab**     | Server detects disconnect, exits            |
+
+## HTML Report (Static)
+
+For CI or sharing, `eyediff test` also generates a static HTML report:
 
 ```
 .eyediff/report.html
@@ -462,7 +503,6 @@ After each test run, eyediff generates an HTML report for visual comparison:
 | **Overlay toggle**   | Switch between side-by-side and overlay comparison |
 | **Filter by status** | Show all / failures only / passed only             |
 | **Keyboard nav**     | Arrow keys to navigate between stories             |
-| **Approve inline**   | One-click approve individual changes               |
 | **Search**           | Filter stories by name                             |
 
 ### Layout
@@ -471,7 +511,7 @@ After each test run, eyediff generates an HTML report for visual comparison:
 ┌─────────────────────────────────────────────────────────────────┐
 │ eyediff Report                          [All] [Failed] [Passed] │
 ├─────────────────────────────────────────────────────────────────┤
-│ Search: [________________]                                      │
+│ Search: [________________]                        [Approve All] │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
 │ ✗ Button/Primary (desktop)                          [Approve]   │
