@@ -11,6 +11,9 @@ const {
 const { die, bold } = require('./console');
 const { version } = require('../package.json');
 
+// FIXME: remove
+cosole.log('>>> USING LOCAL LOKI');
+
 const getExecutorForCommand = (command) => {
   switch (command) {
     case 'init': {
