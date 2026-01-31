@@ -212,17 +212,30 @@ Content-Type: application/json
 {
   "url": "http://host.docker.internal:9999/invoice.pdf",
   "dpi": 144,
-  "pages": "all"
+  "pages": "all",
+  "merge": true
 }
 ```
 
-| Field   | Description                                       |
-| ------- | ------------------------------------------------- |
-| `url`   | PDF URL                                           |
-| `dpi`   | Resolution (72 = low, 144 = high, default: 144)   |
-| `pages` | `"all"`, `"1"`, `"1-3"`, `"1,3,5"` (default: all) |
+| Field   | Description                                          |
+| ------- | ---------------------------------------------------- |
+| `url`   | PDF URL                                              |
+| `dpi`   | Resolution (72 = low, 144 = high, default: 144)      |
+| `pages` | `"all"`, `"1"`, `"1-3"`, `"1,3,5"` (default: all)    |
+| `merge` | `true`: single PNG (stacked), `false`: per-page PNGs |
 
-Returns merged PNG of all requested pages (vertically stacked).
+**Response when `merge: true` (default):**
+- Single PNG with all pages vertically stacked
+
+**Response when `merge: false`:**
+```json
+{
+  "pages": [
+    { "page": 1, "png": "<base64>" },
+    { "page": 2, "png": "<base64>" }
+  ]
+}
+```
 
 #### Response (both endpoints)
 
@@ -827,7 +840,7 @@ eyediff service start
 | -------------- | ------ | ----------------------------- | ---------------------------------- |
 | `/health`      | GET    | -                             | Health check                       |
 | `/compare/web` | POST   | `{ name, url, viewport }`     | Screenshot URL + compare           |
-| `/compare/pdf` | POST   | `{ name, pdf, dpi?, pages? }` | Screenshot PDF + compare           |
+| `/compare/pdf` | POST   | `{ name, pdf, dpi?, pages?, merge? }` | Screenshot PDF + compare     |
 | `/update/web`  | POST   | `{ name, url, viewport }`     | Screenshot URL + save as reference |
 | `/update/pdf`  | POST   | `{ name, pdf, dpi?, pages? }` | Screenshot PDF + save as reference |
 | `/approve`     | POST   | `{ name }`                    | Copy current → reference           |
@@ -864,14 +877,22 @@ const result = await compareWeb({
 });
 // { match: true, score: 0 }
 
-// Compare PDF against snapshot
+// Compare PDF against snapshot (merged)
 const result = await comparePdf({
   name: 'invoice',
   pdf: pdfBuffer,
   dpi: 144,
-  pages: 'all',
 });
 // { match: false, score: 0.0042 }
+
+// Compare PDF per-page (separate snapshots)
+const result = await comparePdf({
+  name: 'report',
+  pdf: pdfBuffer,
+  merge: false,
+});
+// Creates: report-page-1.png, report-page-2.png, etc.
+// { match: false, pages: [{ page: 1, match: true }, { page: 2, match: false }] }
 
 // Approve pending change
 await approve({ name: 'invoice' });
@@ -887,9 +908,12 @@ expect.extend({ toMatchPdfSnapshot, toMatchWebSnapshot });
 test('invoice renders correctly', async () => {
   const pdf = await generateInvoice();
 
-  // Name auto-derived from test name
+  // Merged (default) - single snapshot
   await expect(pdf).toMatchPdfSnapshot();
-  // Options: await expect(pdf).toMatchPdfSnapshot({ dpi: 144, pages: '1' });
+
+  // Per-page - separate snapshots for each page
+  await expect(pdf).toMatchPdfSnapshot({ merge: false });
+  // Creates: invoice-renders-correctly-page-1.png, etc.
 });
 
 test('button primary', async () => {
