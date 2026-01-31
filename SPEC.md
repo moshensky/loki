@@ -505,11 +505,33 @@ EXPOSE 3000
 ENTRYPOINT ["node", "/app/src/server.js"]
 ```
 
-Note: dssim runs on the **host**. The npm package includes prebuilt binaries for:
+### Native Binary Distribution
 
-- macOS (arm64, x64)
-- Linux (x64)
-- Windows (x64)
+dssim runs on the host (not in Docker). Binaries are distributed via platform-specific optional dependencies:
+
+```
+eyediff
+├── optionalDependencies:
+│   ├── @eyediff/dssim-darwin-arm64
+│   ├── @eyediff/dssim-darwin-x64
+│   ├── @eyediff/dssim-linux-x64
+│   └── @eyediff/dssim-win32-x64
+```
+
+npm automatically installs only the package matching the current platform.
+
+Each platform package contains:
+```
+@eyediff/dssim-darwin-arm64/
+├── package.json
+└── bin/
+    └── dssim          # prebuilt binary
+```
+
+The main package resolves the correct binary at runtime:
+```javascript
+const binary = require(`@eyediff/dssim-${process.platform}-${process.arch}`);
+```
 
 ## Future: Alternative Workers
 
