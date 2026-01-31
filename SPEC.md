@@ -14,32 +14,55 @@ Opinionated visual regression testing for Storybook 10+. Runs entirely in Docker
 ## Architecture
 
 ```
-┌─────────────────────────────────────────┐
-│  eyediff Docker container                  │
-│  ├── Chrome headless                    │
-│  ├── dssim (native image diff)          │
-│  └── eyediff CLI                           │
-└─────────────────────────────────────────┘
-            │
-            ▼
-┌─────────────────────────────────────────┐
-│  Storybook (running on host)            │
-│  └── http://host.docker.internal:6006   │
-└─────────────────────────────────────────┘
+Host Machine
+┌────────────────────────────────────────────────────────────────┐
+│                                                                │
+│  ┌──────────────────┐      ┌─────────────────────────────────┐ │
+│  │ Storybook        │      │ eyediff CLI (npm package)       │ │
+│  │ localhost:6006   │      │ $ npx eyediff test              │ │
+│  └──────────────────┘      └───────────────┬─────────────────┘ │
+│           ▲                                │                   │
+│           │                                │ docker run        │
+│           │                                ▼                   │
+│  ┌────────┴───────────────────────────────────────────────────┐│
+│  │ Docker Container (ghcr.io/oblador/eyediff)                 ││
+│  │ ┌────────────────────────────────────────────────────────┐ ││
+│  │ │ 1. Fetch stories    GET /index.json                    │ ││
+│  │ │ 2. For each story:                                     │ ││
+│  │ │    └─► Chrome ─► Navigate ─► Screenshot ─► .eyediff/   │ ││
+│  │ │ 3. Compare          dssim reference.png current.png    │ ││
+│  │ └────────────────────────────────────────────────────────┘ ││
+│  │                                                            ││
+│  │ Volumes:                                                   ││
+│  │   .eyediff/ ◄──► /work/.eyediff (screenshots)              ││
+│  │   package.json ──► /work/package.json (config)             ││
+│  └────────────────────────────────────────────────────────────┘│
+│                                                                │
+└────────────────────────────────────────────────────────────────┘
 ```
+
+## Installation
+
+```bash
+npm install -D eyediff
+```
+
+Requires Docker to be installed and running.
 
 ## Usage
 
 ```bash
 # Run tests
-docker run -v $(pwd)/.eyediff:/eyediff ghcr.io/oblador/eyediff test
+npx eyediff test
 
 # Update references
-docker run -v $(pwd)/.eyediff:/eyediff ghcr.io/oblador/eyediff update
+npx eyediff update
 
 # Approve changes
-docker run -v $(pwd)/.eyediff:/eyediff ghcr.io/oblador/eyediff approve
+npx eyediff approve
 ```
+
+The CLI automatically runs Docker with the correct mounts and networking.
 
 ## Story Discovery
 
@@ -50,6 +73,7 @@ GET http://host.docker.internal:6006/index.json
 ```
 
 Response structure:
+
 ```json
 {
   "v": 5,
@@ -158,21 +182,23 @@ Minimal config in `package.json`:
 
 ## CLI Commands
 
-| Command | Description |
-|---------|-------------|
-| `eyediff test` | Run tests, compare against references |
-| `eyediff update` | Capture new reference screenshots |
+| Command           | Description                                |
+| ----------------- | ------------------------------------------ |
+| `eyediff test`    | Run tests, compare against references      |
+| `eyediff update`  | Capture new reference screenshots          |
 | `eyediff approve` | Copy current to reference (accept changes) |
 
 ## Exit Codes
 
-| Code | Meaning |
-|------|---------|
-| 0 | All tests passed |
-| 1 | Visual differences detected |
-| 2 | Error (stories not found, Chrome crash, etc.) |
+| Code | Meaning                                       |
+| ---- | --------------------------------------------- |
+| 0    | All tests passed                              |
+| 1    | Visual differences detected                   |
+| 2    | Error (stories not found, Chrome crash, etc.) |
 
 ## Docker Image
+
+Published to `ghcr.io/oblador/eyediff`. Contains Chrome, dssim, and the test runner.
 
 ```dockerfile
 FROM node:24
@@ -181,7 +207,6 @@ FROM node:24
 RUN apt-get update && apt-get install -y \
     chromium \
     fonts-liberation \
-    libappindicator3-1 \
     libasound2 \
     libatk-bridge2.0-0 \
     libdrm2 \
@@ -190,33 +215,62 @@ RUN apt-get update && apt-get install -y \
     libnspr4 \
     libnss3 \
     libxss1 \
-    xdg-utils
+    xdg-utils \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install dssim
-RUN cargo install dssim
+# Install Rust and dssim
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
+    && ~/.cargo/bin/cargo install dssim \
+    && cp ~/.cargo/bin/dssim /usr/local/bin/ \
+    && rm -rf ~/.cargo ~/.rustup
 
-# Install eyediff
-COPY . /app
+# Copy eyediff source
 WORKDIR /app
-RUN npm install
+COPY docker/src ./src
+COPY docker/package.json .
+RUN npm install --production
 
-ENTRYPOINT ["node", "/app/bin/eyediff"]
+WORKDIR /work
+ENTRYPOINT ["node", "/app/src/cli.js"]
 ```
 
-## Package Structure (Simplified)
+## Package Structure
 
 ```
 eyediff/
 ├── bin/
-│   └── eyediff              # CLI entry point
-├── src/
-│   ├── cli.js            # Command parsing
-│   ├── runner.js         # Test orchestration
-│   ├── chrome.js         # CDP + screenshots
-│   ├── stories.js        # Fetch from index.json
-│   └── diff.js           # dssim wrapper
-├── Dockerfile
-└── package.json
+│   └── eyediff           # CLI wrapper (runs Docker)
+├── package.json
+└── docker/
+    ├── Dockerfile
+    └── src/
+        ├── cli.js        # Command parsing (inside container)
+        ├── runner.js     # Test orchestration
+        ├── chrome.js     # CDP + screenshots
+        ├── stories.js    # Fetch from index.json
+        └── diff.js       # dssim wrapper
+```
+
+## CLI Wrapper
+
+The npm package is a thin wrapper that invokes Docker:
+
+```javascript
+#!/usr/bin/env node
+const { execSync } = require('child_process');
+const { resolve } = require('path');
+
+const cwd = process.cwd();
+const args = process.argv.slice(2).join(' ');
+
+execSync(
+  `docker run --rm -it \
+  -v ${cwd}/.eyediff:/work/.eyediff \
+  -v ${cwd}/package.json:/work/package.json:ro \
+  --add-host=host.docker.internal:host-gateway \
+  ghcr.io/oblador/eyediff ${args}`,
+  { stdio: 'inherit' }
+);
 ```
 
 ## Out of Scope
