@@ -1,8 +1,10 @@
-# eyediff Specification
+# snapvrt Specification
 
 ## Overview
 
 Opinionated visual regression testing for Storybook 10+.
+
+**Tagline:** Snap. Test. Ship.
 
 ## Design Principles
 
@@ -20,7 +22,7 @@ Opinionated visual regression testing for Storybook 10+.
 │ Host Machine                                                              │
 │                                                                           │
 │  ┌──────────────┐    ┌──────────────────────────────────────────────────┐ │
-│  │ Storybook    │    │ eyediff CLI (orchestrator)                       │ │
+│  │ Storybook    │    │ snapvrt CLI (orchestrator)                       │ │
 │  │ :6006        │◄───│                                                  │ │
 │  └──────────────┘    │  1. Fetch index.json (story discovery)           │ │
 │                      │  2. Spawn M screenshot workers                   │ │
@@ -44,7 +46,7 @@ Opinionated visual regression testing for Storybook 10+.
 │  │ └─Tab N ─► PNG  │    │ └─Tab N ─► PNG  │    Total parallelism:         │
 │  └─────────────────┘    └─────────────────┘    M workers × N tabs         │
 │                                                                           │
-│  .eyediff/                                                                │
+│  .snapvrt/                                                                │
 │  ├── reference/  ◄───────────────────────────────────┐                    │
 │  ├── current/    ◄── screenshots saved here          │ mounted            │
 │  └── difference/ ◄── diff images written here ───────┘                    │
@@ -84,7 +86,7 @@ Alternative diff engines (same protocol):
 | Crate/Module  | Responsibility                             |
 | ------------- | ------------------------------------------ |
 | `cli`         | Command parsing (clap)                     |
-| `config`      | Load from .eyediff/config.toml             |
+| `config`      | Load from .snapvrt/config.toml             |
 | `stories`     | Fetch and filter stories from Storybook    |
 | `docker`      | Spawn and manage containers (bollard)      |
 | `worker_pool` | Distribute tasks to workers                |
@@ -140,7 +142,7 @@ Worker manages tab pooling internally. CLI sends requests; worker assigns to ava
 | `chromiumoxide` | Chrome DevTools Protocol | MIT     |
 | `tokio`         | Async runtime            | MIT     |
 
-Worker starts with tab pool size from env: `EYEDIFF_TABS=4`
+Worker starts with tab pool size from env: `SNAPVRT_TABS=4`
 
 ### Diff Container
 
@@ -175,7 +177,7 @@ Response:
 Filtering:
 
 - Only `type: "story"` (exclude docs)
-- Skip stories with `eyediff-skip` tag
+- Skip stories with `snapvrt-skip` tag
 
 ### Worker Protocol
 
@@ -386,7 +388,7 @@ dssim -o diff.png reference.png current.png
 ## Directory Structure
 
 ```
-.eyediff/
+.snapvrt/
 ├── config.toml
 ├── .gitignore
 ├── snapshots/
@@ -490,7 +492,7 @@ fs::rename(&temp, &path)?;
 
 Reference snapshots are committed; transient files are ignored.
 
-`.eyediff/.gitignore`:
+`.snapvrt/.gitignore`:
 
 ```
 **/current/
@@ -502,20 +504,20 @@ report.html
 
 ### Init Command
 
-`eyediff init` creates the directory structure, gitignore, and config:
+`snapvrt init` creates the directory structure, gitignore, and config:
 
 ```bash
-$ eyediff init
-Created .eyediff/
-Created .eyediff/config.toml
-Created .eyediff/snapshots/
-Created .eyediff/.gitignore
-Ready! Run 'eyediff update' to capture initial screenshots.
+$ snapvrt init
+Created .snapvrt/
+Created .snapvrt/config.toml
+Created .snapvrt/snapshots/
+Created .snapvrt/.gitignore
+Ready! Run 'snapvrt update' to capture initial screenshots.
 ```
 
 ## Configuration
 
-Config in `.eyediff/config.toml`:
+Config in `.snapvrt/config.toml`:
 
 ```toml
 storybook_url = "http://localhost:6006"
@@ -560,31 +562,31 @@ include_aa = false
 ### npm (recommended for Storybook projects)
 
 ```bash
-npm install -D eyediff
+npm install -D snapvrt
 ```
 
 Uses platform-specific packages with prebuilt Rust binaries:
 
 ```
-eyediff
+snapvrt
 ├── optionalDependencies:
-│   ├── @eyediff/cli-darwin-arm64
-│   ├── @eyediff/cli-darwin-x64
-│   ├── @eyediff/cli-linux-x64
-│   └── @eyediff/cli-win32-x64
+│   ├── @snapvrt/cli-darwin-arm64
+│   ├── @snapvrt/cli-darwin-x64
+│   ├── @snapvrt/cli-linux-x64
+│   └── @snapvrt/cli-win32-x64
 ```
 
 ### Standalone
 
 ```bash
 # macOS
-brew install eyediff
+brew install snapvrt
 
 # Linux
-curl -fsSL https://eyediff.dev/install.sh | sh
+curl -fsSL https://snapvrt.dev/install.sh | sh
 
 # Cargo
-cargo install eyediff
+cargo install snapvrt
 ```
 
 ### Requirements
@@ -597,19 +599,19 @@ Docker images are pulled automatically on first run.
 
 | Command                              | Description                                 |
 | ------------------------------------ | ------------------------------------------- |
-| `eyediff init`                       | Initialize project (create dirs, gitignore) |
-| `eyediff test`                       | Run tests, compare against references       |
-| `eyediff test --storybook-dir <dir>` | Use static build (see Static Builds below)  |
-| `eyediff update`                     | Capture new reference screenshots           |
-| `eyediff approve [story-id]`         | Copy current to reference (accept changes)  |
-| `eyediff review`                     | Interactive review UI (see below)           |
+| `snapvrt init`                       | Initialize project (create dirs, gitignore) |
+| `snapvrt test`                       | Run tests, compare against references       |
+| `snapvrt test --storybook-dir <dir>` | Use static build (see Static Builds below)  |
+| `snapvrt update`                     | Capture new reference screenshots           |
+| `snapvrt approve [story-id]`         | Copy current to reference (accept changes)  |
+| `snapvrt review`                     | Interactive review UI (see below)           |
 
 ## Static Builds
 
-With `--storybook-dir`, eyediff serves the static build locally:
+With `--storybook-dir`, snapvrt serves the static build locally:
 
 ```bash
-eyediff test --storybook-dir ./storybook-static
+snapvrt test --storybook-dir ./storybook-static
 ```
 
 1. CLI starts an HTTP server on an available port (e.g., 9222)
@@ -621,10 +623,10 @@ This avoids needing a running Storybook dev server.
 
 ## Interactive Review
 
-`eyediff review` launches an interactive UI for reviewing and approving changes:
+`snapvrt review` launches an interactive UI for reviewing and approving changes:
 
 ```bash
-$ eyediff review
+$ snapvrt review
 Starting review server on http://localhost:4040
 Opening browser...
 
@@ -661,10 +663,10 @@ Press Ctrl+C to exit
 
 ## HTML Report (Static)
 
-For CI or sharing, `eyediff test` also generates a static HTML report:
+For CI or sharing, `snapvrt test` also generates a static HTML report:
 
 ```
-.eyediff/report.html
+.snapvrt/report.html
 ```
 
 ### Features
@@ -681,7 +683,7 @@ For CI or sharing, `eyediff test` also generates a static HTML report:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ eyediff Report                          [All] [Failed] [Passed] │
+│ snapvrt Report                          [All] [Failed] [Passed] │
 ├─────────────────────────────────────────────────────────────────┤
 │ Search: [________________]                                      │
 ├─────────────────────────────────────────────────────────────────┤
@@ -700,7 +702,7 @@ For CI or sharing, `eyediff test` also generates a static HTML report:
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**Note:** Static report is view-only. Use `eyediff review` for interactive approval, or `eyediff approve` CLI command.
+**Note:** Static report is view-only. Use `snapvrt review` for interactive approval, or `snapvrt approve` CLI command.
 
 ### Self-contained
 
@@ -727,9 +729,9 @@ docker run \
   --shm-size=1g \
   --security-opt=seccomp=unconfined \
   --add-host=host.docker.internal:host-gateway \
-  -e EYEDIFF_TABS=4 \
+  -e SNAPVRT_TABS=4 \
   -p ${PORT}:3000 \
-  eyediff-worker
+  snapvrt/snap
 ```
 
 | Flag                                  | Purpose                                        |
@@ -739,7 +741,7 @@ docker run \
 | `--shm-size=1g`                       | Chrome needs shared memory for stability       |
 | `--security-opt=seccomp=unconfined`   | Chrome sandboxing workaround (review security) |
 | `--add-host=host.docker.internal:...` | Linux: map hostname to host gateway            |
-| `-e EYEDIFF_TABS=4`                   | Number of concurrent browser tabs              |
+| `-e SNAPVRT_TABS=4`                   | Number of concurrent browser tabs              |
 | `-p ${PORT}:3000`                     | Map worker HTTP port                           |
 
 ### Chrome Launch (inside container)
@@ -782,10 +784,10 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy pre-built Rust binary
-COPY target/release/eyediff-worker /usr/local/bin/
+COPY target/release/snapvrt-snap /usr/local/bin/
 
 EXPOSE 3000
-ENTRYPOINT ["eyediff-worker"]
+ENTRYPOINT ["snapvrt-snap"]
 ```
 
 ### Diff Container (dssim example)
@@ -796,9 +798,9 @@ RUN cargo install dssim
 
 FROM alpine:latest
 COPY --from=builder /usr/local/cargo/bin/dssim /usr/local/bin/
-COPY target/release/eyediff-diff /usr/local/bin/
+COPY target/release/snapvrt-diff /usr/local/bin/
 
-ENTRYPOINT ["eyediff-diff"]
+ENTRYPOINT ["snapvrt-diff"]
 ```
 
 ### Image Comparison
@@ -811,8 +813,8 @@ Single container processes all images at once (avoids container startup overhead
 
 ```bash
 docker run --rm \
-  -v .eyediff:/work \
-  eyediff-diff \
+  -v .snapvrt:/work \
+  snapvrt/diff-dssim \
   --reference /work/reference \
   --current /work/current \
   --output /work/difference \
@@ -837,28 +839,28 @@ Diff images written to `--output` directory only for failures.
 
 Separate Docker images per engine (avoids license conflicts):
 
-| Engine        | Image                      | License    | Notes                    |
-| ------------- | -------------------------- | ---------- | ------------------------ |
-| `dssim`       | `eyediff-diff-dssim`       | AGPL-3.0   | Perceptual, human vision |
-| `pixelmatch`  | `eyediff-diff-pixelmatch`  | ISC        | Fast, pixel-by-pixel     |
-| `imagemagick` | `eyediff-diff-imagemagick` | Apache-2.0 | Various algorithms       |
-| `looks-same`  | `eyediff-diff-lookssame`   | MIT        | Antialiasing-tolerant    |
+| Engine        | Image                       | License    | Notes                    |
+| ------------- | --------------------------- | ---------- | ------------------------ |
+| `dssim`       | `snapvrt/diff-dssim`        | AGPL-3.0   | Perceptual, human vision |
+| `pixelmatch`  | `snapvrt/diff-pixelmatch`   | ISC        | Fast, pixel-by-pixel     |
+| `imagemagick` | `snapvrt/diff-imagemagick`  | Apache-2.0 | Various algorithms       |
+| `looks-same`  | `snapvrt/diff-lookssame`    | MIT        | Antialiasing-tolerant    |
 
 All images implement the same protocol - only the comparison algorithm differs.
 
-Configure engine in `.eyediff/config.toml` (see Configuration section).
+Configure engine in `.snapvrt/config.toml` (see Configuration section).
 
 ### Reusable Diff Container
 
-The diff container is designed for reuse beyond eyediff. Any tool needing consistent cross-platform image comparison can use it:
+The diff container is designed for reuse beyond snapvrt. Any tool needing consistent cross-platform image comparison can use it:
 
 ```bash
-# From eyediff (Rust)
-docker run eyediff-diff --reference a.png --current b.png
+# From snapvrt (Rust)
+docker run snapvrt/diff-dssim --reference a.png --current b.png
 
 # From pdf-visual-diff (Node.js)
 const { execSync } = require('child_process');
-execSync('docker run eyediff-diff ...');
+execSync('docker run snapvrt/diff-dssim ...');
 
 # From any language
 POST http://localhost:3001/diff { reference, current } → { score, diff }
@@ -866,17 +868,17 @@ POST http://localhost:3001/diff { reference, current } → { score, diff }
 
 Potential consumers:
 
-- **eyediff** - Storybook visual regression
+- **snapvrt** - Storybook visual regression
 - **pdf-visual-diff** - PDF visual regression
 - **Other tools** - Any image comparison needing cross-platform consistency
 
 ## Project Structure
 
 ```
-eyediff/
+snapvrt/
 ├── Cargo.toml              # Workspace
 ├── crates/
-│   ├── eyediff/            # CLI binary
+│   ├── snapvrt/            # CLI binary
 │   │   ├── Cargo.toml
 │   │   └── src/
 │   │       ├── main.rs
@@ -887,14 +889,14 @@ eyediff/
 │   │       ├── worker_pool.rs
 │   │       ├── reporter.rs
 │   │       └── review.rs
-│   └── eyediff-worker/     # Screenshot worker binary
+│   └── snapvrt-snap/       # Screenshot worker binary
 │       ├── Cargo.toml
 │       └── src/
 │           ├── main.rs
 │           ├── server.rs
 │           └── screenshot.rs
 ├── docker/
-│   ├── worker/
+│   ├── snap/
 │   │   └── Dockerfile
 │   └── diff/
 │       ├── dssim/
@@ -915,25 +917,25 @@ eyediff/
 
 ## Service Mode
 
-eyediff can run as a long-running service for integration with test frameworks (Jest, Vitest, etc.).
+snapvrt can run as a long-running service for integration with test frameworks (Jest, Vitest, etc.).
 
 ### Use Case
 
-- **Batch mode (CLI):** `eyediff test` - Storybook screenshots, runs once
-- **Service mode:** `eyediff service start` - Long-running, serves test assertions
+- **Batch mode (CLI):** `snapvrt test` - Storybook screenshots, runs once
+- **Service mode:** `snapvrt service start` - Long-running, serves test assertions
 
 Service mode enables fast assertions without container startup per test.
 
 ### Starting the Service
 
 ```bash
-# From project root (reads .eyediff/config.toml)
-eyediff service start
+# From project root (reads .snapvrt/config.toml)
+snapvrt service start
 
 # Service manages:
-# - .eyediff/reference/    (reads)
-# - .eyediff/current/      (writes)
-# - .eyediff/difference/   (writes on mismatch)
+# - .snapvrt/reference/    (reads)
+# - .snapvrt/current/      (writes)
+# - .snapvrt/difference/   (writes on mismatch)
 ```
 
 ### Service API
@@ -984,8 +986,8 @@ POST /compare/pdf { name: "invoice", pdf, merge: false }
 Lightweight client (~50 lines, no native deps):
 
 ```javascript
-// @eyediff/client
-import { compareWeb, comparePdf, approve } from '@eyediff/client';
+// @snapvrt/client
+import { compareWeb, comparePdf, approve } from '@snapvrt/client';
 
 // Compare web page against snapshot
 const result = await compareWeb({
@@ -1028,8 +1030,8 @@ await approve({ name: 'invoice' });
 ### Jest Integration
 
 ```javascript
-// @eyediff/jest
-import { toMatchPdfSnapshot, toMatchWebSnapshot } from '@eyediff/jest';
+// @snapvrt/jest
+import { toMatchPdfSnapshot, toMatchWebSnapshot } from '@snapvrt/jest';
 expect.extend({ toMatchPdfSnapshot, toMatchWebSnapshot });
 
 test('invoice renders correctly', async () => {
@@ -1054,38 +1056,38 @@ test('button primary', async () => {
 
 ```bash
 # 1. Start service (once)
-eyediff service start
+snapvrt service start
 
 # 2. Run tests (many compare calls, fast)
 npm test
 
 # 3. Review failures
-eyediff review
+snapvrt review
 
 # 4. Approve or fix
-eyediff approve invoice
-eyediff approve --all
+snapvrt approve invoice
+snapvrt approve --all
 
 # 5. Stop service
-eyediff service stop
+snapvrt service stop
 ```
 
 ### CLI Commands (Service)
 
 | Command                  | Description                          |
 | ------------------------ | ------------------------------------ |
-| `eyediff service start`  | Start long-running service           |
-| `eyediff service stop`   | Stop service                         |
-| `eyediff service status` | Check if running, show pending diffs |
+| `snapvrt service start`  | Start long-running service           |
+| `snapvrt service stop`   | Stop service                         |
+| `snapvrt service status` | Check if running, show pending diffs |
 
 ### Packages
 
 | Package           | Description                        |
 | ----------------- | ---------------------------------- |
-| `eyediff`         | Rust CLI (npm binary distribution) |
-| `@eyediff/client` | JS client for service API          |
-| `@eyediff/jest`   | Jest matchers                      |
-| `@eyediff/vitest` | Vitest matchers (future)           |
+| `snapvrt`         | Rust CLI (npm binary distribution) |
+| `@snapvrt/client` | JS client for service API          |
+| `@snapvrt/jest`   | Jest matchers                      |
+| `@snapvrt/vitest` | Vitest matchers (future)           |
 
 ### Benefits
 
@@ -1094,7 +1096,7 @@ eyediff service stop
 | **Fast assertions**      | HTTP call vs container startup per test    |
 | **Consistent rendering** | Chrome (Docker) renders PDFs + URLs        |
 | **Consistent diffs**     | Same diff container for all comparisons    |
-| **Unified workflow**     | Same `eyediff review` for Storybook + PDFs |
+| **Unified workflow**     | Same `snapvrt review` for Storybook + PDFs |
 | **Light JS client**      | No native dependencies in test code        |
 
 ## Extensibility
@@ -1162,7 +1164,7 @@ Design constraint: backends receive **resolved URLs**, not raw config. URL resol
 When local Chrome backend is added, detection order:
 
 1. Config: `chrome_path = "/path/to/chrome"`
-2. Env: `EYEDIFF_CHROME_PATH`
+2. Env: `SNAPVRT_CHROME_PATH`
 3. Platform-specific common locations
 4. PATH lookup
 5. Error with helpful message
