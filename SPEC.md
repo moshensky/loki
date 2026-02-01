@@ -510,7 +510,7 @@ report.html
 $ snapvrt init
 Created .snapvrt/
 Created .snapvrt/config.toml
-Created .snapvrt/snapshots/
+Created .snapvrt/captureshots/
 Created .snapvrt/.gitignore
 Ready! Run 'snapvrt update' to capture initial screenshots.
 ```
@@ -731,7 +731,7 @@ docker run \
   --add-host=host.docker.internal:host-gateway \
   -e SNAPVRT_TABS=4 \
   -p ${PORT}:3000 \
-  snapvrt/snap
+  snapvrt/capture
 ```
 
 | Flag                                  | Purpose                                        |
@@ -784,10 +784,10 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy pre-built Rust binary
-COPY target/release/snapvrt-snap /usr/local/bin/
+COPY target/release/snapvrt-capture /usr/local/bin/
 
 EXPOSE 3000
-ENTRYPOINT ["snapvrt-snap"]
+ENTRYPOINT ["snapvrt-capture"]
 ```
 
 ### Diff Container (dssim example)
@@ -889,14 +889,14 @@ snapvrt/
 │   │       ├── worker_pool.rs
 │   │       ├── reporter.rs
 │   │       └── review.rs
-│   └── snapvrt-snap/       # Screenshot worker binary
+│   └── snapvrt-capture/       # Screenshot worker binary
 │       ├── Cargo.toml
 │       └── src/
 │           ├── main.rs
 │           ├── server.rs
 │           └── screenshot.rs
 ├── docker/
-│   ├── snap/
+│   ├── capture/
 │   │   └── Dockerfile
 │   └── diff/
 │       ├── dssim/
@@ -1189,11 +1189,11 @@ When local Chrome backend is added, detection order:
 
 ### Repository
 
-| Platform         | Location            |
-| ---------------- | ------------------- |
-| **GitHub org**   | `snapvrt`           |
-| **Repository**   | `snapvrt/snapvrt`   |
-| **GitHub Pages** | `snapvrt.github.io` |
+| Platform         | Location             |
+| ---------------- | -------------------- |
+| **GitHub org**   | `snapvrt`            |
+| **Repository**   | `snapvrt/capturevrt` |
+| **GitHub Pages** | `snapvrt.github.io`  |
 
 Product-focused org for clean branding. Personal credit via contributions visible on your GitHub profile.
 
@@ -1202,8 +1202,8 @@ Product-focused org for clean branding. Personal credit via contributions visibl
 | Registry       | Namespace  | Examples                                           |
 | -------------- | ---------- | -------------------------------------------------- |
 | **npm**        | `@snapvrt` | `@snapvrt/cli`, `@snapvrt/client`, `@snapvrt/jest` |
-| **Docker Hub** | `snapvrt`  | `snapvrt/snap`, `snapvrt/diff-dssim`               |
-| **crates.io**  | `snapvrt`  | `snapvrt`, `snapvrt-snap`                          |
+| **Docker Hub** | `snapvrt`  | `snapvrt/capture`, `snapvrt/diff-dssim`            |
+| **crates.io**  | `snapvrt`  | `snapvrt`, `snapvrt-capture`                       |
 
 All namespaces unified under `snapvrt`.
 
