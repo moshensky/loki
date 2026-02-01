@@ -81,7 +81,9 @@ Alternative diff engines (same protocol):
 
 ## Modules
 
-### CLI (Rust binary, MIT license)
+### CLI & Service (Rust binary, MIT license)
+
+> Design doc: [design/orchestrator.md](design/orchestrator.md)
 
 | Crate/Module  | Responsibility                             |
 | ------------- | ------------------------------------------ |
@@ -91,7 +93,8 @@ Alternative diff engines (same protocol):
 | `docker`      | Spawn and manage containers (bollard)      |
 | `worker_pool` | Distribute tasks to workers                |
 | `reporter`    | Terminal output and HTML report generation |
-| `review`      | Local HTTP server for interactive review   |
+| `service`     | HTTP API server (axum)                     |
+| `review`      | Review UI serving                          |
 
 ### Screenshot Worker (Rust binary in Docker)
 
