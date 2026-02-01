@@ -784,10 +784,10 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy pre-built Rust binary
-COPY target/release/snapvrt-capture /usr/local/bin/
+COPY target/release/capture /usr/local/bin/
 
 EXPOSE 3000
-ENTRYPOINT ["snapvrt-capture"]
+ENTRYPOINT ["capture"]
 ```
 
 ### Diff Container (dssim example)
@@ -889,7 +889,7 @@ snapvrt/
 │   │       ├── worker_pool.rs
 │   │       ├── reporter.rs
 │   │       └── review.rs
-│   └── snapvrt-capture/    # Capture worker (internal, Docker only)
+│   └── capture/            # Capture worker (internal, Docker only)
 │       ├── Cargo.toml
 │       └── src/
 │           ├── main.rs
@@ -1211,7 +1211,7 @@ Product-focused org for clean branding. Personal credit via contributions visibl
 | -------------- | ---------- | -------------------------------------------------- |
 | **npm**        | `@snapvrt` | `@snapvrt/cli`, `@snapvrt/client`, `@snapvrt/jest` |
 | **Docker Hub** | `snapvrt`  | `snapvrt/capture`, `snapvrt/diff-dssim`            |
-| **crates.io**  | `snapvrt`  | `snapvrt`, `snapvrt-capture`                       |
+| **crates.io**  | `snapvrt`  | `snapvrt`                                          |
 
 All namespaces unified under `snapvrt`.
 
@@ -1235,20 +1235,19 @@ Start with GitHub Pages. Add custom domain when/if needed.
 
 ### crates.io
 
-| Crate             | Purpose        | Published                     |
-| ----------------- | -------------- | ----------------------------- |
-| `snapvrt`         | CLI binary     | ✅ Yes                        |
-| `snapvrt-capture` | Capture worker | ❌ No (internal, Docker only) |
+| Crate     | Purpose    | Install                 |
+| --------- | ---------- | ----------------------- |
+| `snapvrt` | CLI binary | `cargo install snapvrt` |
 
 ### npm
 
-**Main package:**
+**Main package (unscoped):**
 
-| Package   | Purpose                                          |
-| --------- | ------------------------------------------------ |
-| `snapvrt` | Main package, downloads platform-specific binary |
+| Package   | Purpose                                          | Install                  |
+| --------- | ------------------------------------------------ | ------------------------ |
+| `snapvrt` | Main package, downloads platform-specific binary | `npm install -D snapvrt` |
 
-**Platform binaries (optionalDependencies):**
+**Platform binaries (optionalDependencies of `snapvrt`):**
 
 | Package                     | Platform          |
 | --------------------------- | ----------------- |
@@ -1258,7 +1257,7 @@ Start with GitHub Pages. Add custom domain when/if needed.
 | `@snapvrt/cli-linux-arm64`  | Linux ARM64       |
 | `@snapvrt/cli-win32-x64`    | Windows x64       |
 
-**JavaScript packages:**
+**JavaScript libraries (scoped):**
 
 | Package           | Purpose                   |
 | ----------------- | ------------------------- |
