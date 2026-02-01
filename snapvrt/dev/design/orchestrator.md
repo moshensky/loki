@@ -142,7 +142,7 @@ Based on decisions above:
 │                                 │                                          │
 │                                 ▼                                          │
 │                    ┌────────────────────────┐                              │
-│                    │  GET :4040/health      │                              │
+│                    │  GET :{port}/health    │                              │
 │                    │  (is service running?) │                              │
 │                    └────────────────────────┘                              │
 │                          │           │                                     │
@@ -171,7 +171,7 @@ Based on decisions above:
 │ SERVICE MODE (snapvrt service start)                                       │
 │                                                                            │
 │  ┌──────────────────────────────────────────────────────────────────────┐  │
-│  │ HTTP API (:4040)                                                     │  │
+│  │ HTTP API (:{port}, default 4040)                                     │  │
 │  │                                                                      │  │
 │  │  GET  /health ─────────── returns 200 (enables CLI detection)        │  │
 │  │  GET  /status ─────────── pending diffs, running operations          │  │
@@ -198,7 +198,7 @@ Based on decisions above:
 **Flow:**
 
 1. CLI command starts (test, update, approve, review)
-2. First action: `GET :4040/health` - is service running?
+2. First action: `GET :{port}/health` - is service running? (port from `--port` flag or config, default 4040)
 3. **200 OK** → delegate to service API
 4. **Connection refused** → run standalone (start containers, execute, cleanup)
 5. Both paths read/write to same `.snapvrt/` directory
@@ -221,8 +221,16 @@ Based on decisions above:
 | -------------------------------------- | ----------------------------------------- |
 | `snapvrt service start`                | Start HTTP API (foreground)               |
 | `snapvrt service start --host 0.0.0.0` | Bind to all interfaces (for CI/Docker)    |
+| `snapvrt service start --port 5050`    | Use custom port                           |
 | `snapvrt service status`               | Show if running, pending diffs            |
 | `snapvrt review`                       | Open review UI (starts service if needed) |
+
+### Global Flags
+
+| Flag              | Default     | Description                              |
+| ----------------- | ----------- | ---------------------------------------- |
+| `--port <PORT>`   | `4040`      | Port for service (used by all commands)  |
+| `--config <FILE>` | `snapvrt.toml` | Config file path                      |
 
 **Note:** No `--daemon` flag in v1. Use shell backgrounding (`&`) or systemd/launchd for long-running services.
 
