@@ -86,7 +86,6 @@ Alternative diff engines (same protocol):
 | `cli`         | Command parsing (clap)                     |
 | `config`      | Load from .eyediff/config.toml             |
 | `stories`     | Fetch and filter stories from Storybook    |
-| `turbosnap`   | Detect changed stories via git diff        |
 | `docker`      | Spawn and manage containers (bollard)      |
 | `worker_pool` | Distribute tasks to workers                |
 | `reporter`    | Terminal output and HTML report generation |
@@ -177,7 +176,6 @@ Filtering:
 
 - Only `type: "story"` (exclude docs)
 - Skip stories with `eyediff-skip` tag
-- With `--changed-since`: match `importPath` against git diff
 
 ### Worker Protocol
 
@@ -601,7 +599,6 @@ Docker images are pulled automatically on first run.
 | ------------------------------------ | ------------------------------------------- |
 | `eyediff init`                       | Initialize project (create dirs, gitignore) |
 | `eyediff test`                       | Run tests, compare against references       |
-| `eyediff test --changed-since <ref>` | Only test stories affected by git changes   |
 | `eyediff test --storybook-dir <dir>` | Use static build (see Static Builds below)  |
 | `eyediff update`                     | Capture new reference screenshots           |
 | `eyediff approve [story-id]`         | Copy current to reference (accept changes)  |
@@ -621,39 +618,6 @@ eyediff test --storybook-dir ./storybook-static
 4. Server shuts down after test run completes
 
 This avoids needing a running Storybook dev server.
-
-## Incremental Testing (TurboSnap-style)
-
-With `--changed-since`, eyediff only captures stories affected by code changes:
-
-```bash
-eyediff test --changed-since main
-```
-
-### How it works
-
-1. Get list of changed files: `git diff --name-only main`
-2. Parse `index.json` to get story → file mappings (`importPath`)
-3. Only test stories whose `importPath` is in the changed files list
-4. Reuse existing reference for unchanged stories
-
-### Limitations
-
-Only direct `importPath` matches are detected. Changes to shared components, CSS, or transitive dependencies won't trigger affected stories. For full coverage, run without `--changed-since` periodically (e.g., on main branch).
-
-### Example
-
-```
-Changed files:
-  src/components/Button.tsx
-  src/components/Button.stories.tsx
-
-Stories to test:
-  ✓ example-button--primary     (importPath matches)
-  ✓ example-button--secondary   (importPath matches)
-  ⊘ example-header--default     (skipped, no changes)
-  ⊘ example-page--logged-in     (skipped, no changes)
-```
 
 ## Interactive Review
 
@@ -1208,3 +1172,4 @@ When local Chrome backend is added, detection order:
 - Storybook < 10
 - React Native / mobile apps
 - Non-Docker backends (traits defined, implementations future)
+- Incremental testing / TurboSnap-style `--changed-since` (git-based story filtering)
