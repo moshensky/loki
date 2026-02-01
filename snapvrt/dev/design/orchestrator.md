@@ -289,36 +289,75 @@ snapvrt/src/
 | `docker` | Docker container lifecycle. Start/stop capture and diff containers. Health checks. Idle timeout management.            |
 | `store`  | Filesystem operations for `.snapvrt/`. Read/write reference, current, diff images. List pending diffs.                 |
 
-### Module Dependencies
+### Module Dependencies (compile-time)
 
 ```
-                    ┌─────────┐
-                    │  main   │
-                    └────┬────┘
-                         │
-              ┌──────────┼──────────┐
-              ▼          ▼          ▼
-         ┌────────┐ ┌────────┐ ┌────────┐
-         │  cli   │ │ server │ │ config │
-         └────┬───┘ └────┬───┘ └────────┘
-              │          │          │
-              └────┬─────┘          │
-                   ▼                │
-              ┌────────┐            │
-              │ engine │◄───────────┘
-              └────┬───┘
-                   │
-         ┌─────────┼─────────┐
-         ▼                   ▼
-    ┌────────┐          ┌────────┐
-    │ docker │          │ store  │
-    └────────┘          └────────┘
+                     ┌─────┐
+                     │ cli │
+                     └──┬──┘
+            ┌───────────┼───────────┐
+            ▼           ▼           │
+       ┌────────┐  ┌────────┐       │
+       │ config │  │ server │       │
+       └────────┘  └───┬────┘       │
+                       │            │
+                       └──────┬─────┘
+                              ▼
+                         ┌────────┐
+                         │ engine │
+                         └───┬────┘
+                       ┌─────┴─────┐
+                       ▼           ▼
+                  ┌────────┐  ┌────────┐
+                  │ docker │  │ store  │
+                  └────────┘  └────────┘
 ```
 
-- `cli` and `server` are **interfaces** - they parse input and call `engine`
-- `engine` is the **core** - contains all business logic
-- `docker` and `store` are **infrastructure** - engine uses these for side effects
-- `config` is loaded at startup, passed to modules that need it
+| From     | To                     |
+| -------- | ---------------------- |
+| `cli`    | config, server, engine |
+| `server` | engine                 |
+| `engine` | docker, store          |
+
+### Runtime Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ snapvrt <command>                                                           │
+└──────────────────────────────────────┬──────────────────────────────────────┘
+                                       │
+                                       ▼
+                              ┌─────────────────┐
+                              │  config::load() │
+                              └────────┬────────┘
+                                       │
+                                       ▼
+                         ┌─────────────────────────────┐
+                         │ command = "service start"? │
+                         └─────────────┬───────────────┘
+                                       │
+                      ┌────────────────┴────────────────┐
+                      │ yes                             │ no
+                      ▼                                 ▼
+          ┌───────────────────────┐        ┌───────────────────────┐
+          │ server::start(engine) │        │ GET :{port}/health    │
+          │                       │        └───────────┬───────────┘
+          │ (blocks, serves HTTP) │                    │
+          └───────────────────────┘       ┌────────────┴────────────┐
+                                          │ 200 OK                  │ refused
+                                          ▼                         ▼
+                              ┌─────────────────────┐  ┌─────────────────────┐
+                              │ delegate to service │  │ engine::run(cmd)    │
+                              │                     │  │                     │
+                              │ POST :{port}/...    │  │ (standalone mode)   │
+                              └─────────────────────┘  └─────────────────────┘
+```
+
+**Paths:**
+
+- `service start` → start HTTP server, block
+- batch + service running → delegate via HTTP
+- batch + no service → run engine directly (standalone)
 
 ### Key Types (Draft)
 
