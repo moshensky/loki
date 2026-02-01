@@ -878,7 +878,7 @@ Potential consumers:
 snapvrt/
 ├── Cargo.toml              # Workspace
 ├── crates/
-│   ├── snapvrt/            # CLI binary
+│   ├── snapvrt/            # CLI binary (published to crates.io)
 │   │   ├── Cargo.toml
 │   │   └── src/
 │   │       ├── main.rs
@@ -889,7 +889,7 @@ snapvrt/
 │   │       ├── worker_pool.rs
 │   │       ├── reporter.rs
 │   │       └── review.rs
-│   └── snapvrt-capture/       # Screenshot worker binary
+│   └── snapvrt-capture/    # Capture worker (internal, Docker only)
 │       ├── Cargo.toml
 │       └── src/
 │           ├── main.rs
@@ -901,8 +901,16 @@ snapvrt/
 │   └── diff/
 │       ├── dssim/
 │       │   └── Dockerfile
-│       └── pixelmatch/
+│       ├── pixelmatch/
+│       │   └── Dockerfile
+│       ├── lookssame/
+│       │   └── Dockerfile
+│       └── imagemagick/
 │           └── Dockerfile
+├── packages/               # npm packages
+│   ├── snapvrt/            # Main npm package
+│   ├── client/             # @snapvrt/client
+│   └── jest/               # @snapvrt/jest
 └── web/                    # Review UI (static HTML/CSS/JS)
     └── index.html
 ```
@@ -1222,6 +1230,75 @@ Start with GitHub Pages. Add custom domain when/if needed.
 | **Initial**     | GitHub Pages                 | `snapvrt.github.io` |
 | **With domain** | GitHub Pages + custom domain | `snapvrt.dev`       |
 | **Growth**      | Vercel/Netlify (if needed)   | `snapvrt.dev`       |
+
+## Published Artifacts
+
+### crates.io
+
+| Crate             | Purpose        | Published                     |
+| ----------------- | -------------- | ----------------------------- |
+| `snapvrt`         | CLI binary     | ✅ Yes                        |
+| `snapvrt-capture` | Capture worker | ❌ No (internal, Docker only) |
+
+### npm
+
+**Main package:**
+
+| Package   | Purpose                                          |
+| --------- | ------------------------------------------------ |
+| `snapvrt` | Main package, downloads platform-specific binary |
+
+**Platform binaries (optionalDependencies):**
+
+| Package                     | Platform          |
+| --------------------------- | ----------------- |
+| `@snapvrt/cli-darwin-arm64` | macOS ARM (M1/M2) |
+| `@snapvrt/cli-darwin-x64`   | macOS Intel       |
+| `@snapvrt/cli-linux-x64`    | Linux x64         |
+| `@snapvrt/cli-linux-arm64`  | Linux ARM64       |
+| `@snapvrt/cli-win32-x64`    | Windows x64       |
+
+**JavaScript packages:**
+
+| Package           | Purpose                   |
+| ----------------- | ------------------------- |
+| `@snapvrt/client` | JS client for service API |
+| `@snapvrt/jest`   | Jest matchers             |
+| `@snapvrt/vitest` | Vitest matchers (future)  |
+
+### Docker Hub
+
+**Capture worker:**
+
+| Image             | Purpose                                  |
+| ----------------- | ---------------------------------------- |
+| `snapvrt/capture` | Screenshot worker (Chrome + Rust binary) |
+
+**Diff engines:**
+
+| Image                      | Engine      | License    |
+| -------------------------- | ----------- | ---------- |
+| `snapvrt/diff-dssim`       | dssim       | AGPL-3.0   |
+| `snapvrt/diff-pixelmatch`  | pixelmatch  | ISC        |
+| `snapvrt/diff-lookssame`   | looks-same  | MIT        |
+| `snapvrt/diff-imagemagick` | imagemagick | Apache-2.0 |
+
+### GitHub Releases
+
+| Asset                         | Description        |
+| ----------------------------- | ------------------ |
+| `snapvrt-darwin-arm64.tar.gz` | macOS ARM binary   |
+| `snapvrt-darwin-x64.tar.gz`   | macOS Intel binary |
+| `snapvrt-linux-x64.tar.gz`    | Linux x64 binary   |
+| `snapvrt-linux-arm64.tar.gz`  | Linux ARM64 binary |
+| `snapvrt-win32-x64.zip`       | Windows x64 binary |
+| `checksums.txt`               | SHA256 checksums   |
+
+### Homebrew (Future)
+
+| Formula   | Tap                                                   |
+| --------- | ----------------------------------------------------- |
+| `snapvrt` | `snapvrt/tap` (initially), homebrew-core (if popular) |
 
 ## Out of Scope (Initial Release)
 
