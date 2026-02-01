@@ -352,11 +352,11 @@ Three-phase approach to minimize Docker calls:
 
 **Why this helps:**
 
-| Scenario | Without optimization | With optimization |
-|----------|---------------------|-------------------|
-| 100 unchanged (same hash) | 100 Docker calls | 0 Docker calls |
-| 100 unchanged (re-encoded PNG) | 100 Docker calls | 0 Docker calls |
-| 95 unchanged, 5 changed | 100 Docker calls | 5 Docker calls |
+| Scenario                       | Without optimization | With optimization |
+| ------------------------------ | -------------------- | ----------------- |
+| 100 unchanged (same hash)      | 100 Docker calls     | 0 Docker calls    |
+| 100 unchanged (re-encoded PNG) | 100 Docker calls     | 0 Docker calls    |
+| 95 unchanged, 5 changed        | 100 Docker calls     | 5 Docker calls    |
 
 **Fast pixel check (Rust, in-process):**
 
@@ -839,12 +839,12 @@ Diff images written to `--output` directory only for failures.
 
 Separate Docker images per engine (avoids license conflicts):
 
-| Engine        | Image                       | License    | Notes                    |
-| ------------- | --------------------------- | ---------- | ------------------------ |
-| `dssim`       | `snapvrt/diff-dssim`        | AGPL-3.0   | Perceptual, human vision |
-| `pixelmatch`  | `snapvrt/diff-pixelmatch`   | ISC        | Fast, pixel-by-pixel     |
-| `imagemagick` | `snapvrt/diff-imagemagick`  | Apache-2.0 | Various algorithms       |
-| `looks-same`  | `snapvrt/diff-lookssame`    | MIT        | Antialiasing-tolerant    |
+| Engine        | Image                      | License    | Notes                    |
+| ------------- | -------------------------- | ---------- | ------------------------ |
+| `dssim`       | `snapvrt/diff-dssim`       | AGPL-3.0   | Perceptual, human vision |
+| `pixelmatch`  | `snapvrt/diff-pixelmatch`  | ISC        | Fast, pixel-by-pixel     |
+| `imagemagick` | `snapvrt/diff-imagemagick` | Apache-2.0 | Various algorithms       |
+| `looks-same`  | `snapvrt/diff-lookssame`   | MIT        | Antialiasing-tolerant    |
 
 All images implement the same protocol - only the comparison algorithm differs.
 
@@ -1168,6 +1168,61 @@ When local Chrome backend is added, detection order:
 3. Platform-specific common locations
 4. PATH lookup
 5. Error with helpful message
+
+## Project Infrastructure
+
+### Branding
+
+| Element     | Value               |
+| ----------- | ------------------- |
+| **Name**    | snapvrt             |
+| **Tagline** | "Snap. Test. Ship." |
+
+**Tagline placement:**
+
+| Location            | Format                                                       |
+| ------------------- | ------------------------------------------------------------ |
+| GitHub README       | `# snapvrt` <br> `Snap. Test. Ship.`                         |
+| npm description     | "Visual regression testing for Storybook. Snap. Test. Ship." |
+| Landing page hero   | Large heading with tagline                                   |
+| `snapvrt --version` | `snapvrt 0.1.0 - Snap. Test. Ship.`                          |
+
+### Repository
+
+| Platform         | Location                      |
+| ---------------- | ----------------------------- |
+| **GitHub org**   | `sparkmill`                   |
+| **Repository**   | `sparkmill/snapvrt`           |
+| **GitHub Pages** | `sparkmill.github.io/snapvrt` |
+
+Sparkmill serves as a portfolio org for OSS projects.
+
+### Packages
+
+| Registry       | Namespace  | Examples                                           |
+| -------------- | ---------- | -------------------------------------------------- |
+| **npm**        | `@snapvrt` | `@snapvrt/cli`, `@snapvrt/client`, `@snapvrt/jest` |
+| **Docker Hub** | `snapvrt`  | `snapvrt/snap`, `snapvrt/diff-dssim`               |
+| **crates.io**  | `snapvrt`  | `snapvrt`, `snapvrt-snap`                          |
+
+npm scope is product-focused (`@snapvrt`), separate from GitHub org (`sparkmill`).
+
+### Domains (Future)
+
+| Domain          | Purpose                   | Priority                    |
+| --------------- | ------------------------- | --------------------------- |
+| `sparkmill.dev` | Portfolio/company landing | Optional                    |
+| `snapvrt.dev`   | Product landing & docs    | When project gains traction |
+
+Start with GitHub Pages. Add custom domains when/if needed.
+
+### Hosting Strategy
+
+| Phase           | Hosting                      | URL                           |
+| --------------- | ---------------------------- | ----------------------------- |
+| **Initial**     | GitHub Pages                 | `sparkmill.github.io/snapvrt` |
+| **With domain** | GitHub Pages + custom domain | `snapvrt.dev`                 |
+| **Growth**      | Vercel/Netlify (if needed)   | `snapvrt.dev`                 |
 
 ## Out of Scope (Initial Release)
 
