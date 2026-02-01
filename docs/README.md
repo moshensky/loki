@@ -2,7 +2,7 @@
 
 Snap. Test. Ship.
 
-Visual regression testing for Storybook 10+.
+Visual regression testing for Storybook 10+ and PDFs.
 
 ## Status
 
@@ -13,8 +13,9 @@ Visual regression testing for Storybook 10+.
 snapvrt is an opinionated visual regression testing tool that:
 
 - Captures screenshots from Storybook stories
-- Compares them against reference snapshots
+- Compares PDFs for visual regressions
 - Generates visual diffs for review
+- Runs consistently across platforms via Docker
 
 ## Design Principles
 
@@ -26,12 +27,23 @@ snapvrt is an opinionated visual regression testing tool that:
 
 ## Documentation
 
-- [Specification](docs/SPEC.md) - Full technical specification
-- [Design Documents](docs/design/) - Module design decisions
+### For Users
+
+- [Getting Started](docs/getting-started.md)
+- [Configuration](docs/configuration.md)
+- [CLI Reference](docs/cli-reference.md)
+- [CI Integration](docs/ci-integration.md)
+- [Service API](docs/service-api.md)
+
+### For Contributors
+
+- [Contributing Guide](CONTRIBUTING.md)
+- [Specification](dev/SPEC.md)
+- [Design Documents](dev/design/)
 
 ## Installation
 
-> Not yet published. Coming soon.
+> Not yet published.
 
 ```bash
 # npm (recommended)
@@ -39,9 +51,6 @@ npm install -D snapvrt
 
 # cargo
 cargo install snapvrt
-
-# homebrew (future)
-brew install snapvrt
 ```
 
 ## Quick Start
