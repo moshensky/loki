@@ -71,11 +71,11 @@ Alternative diff engines (same protocol):
 
 ### Why This Design
 
+- **Docker-first** - Consistent screenshots AND diffs across all platforms
 - **Parallelization** - Spawn N screenshot workers for speed
-- **Pluggable** - Docker, Lambda, remote service, cloud browsers
+- **Pluggable** - Simple protocols enable alternative backends
 - **CLI has context** - Access to git, filesystem, config
 - **Workers are stateless** - Just URLs in, PNGs out
-- **Consistent diffs** - Diff container ensures identical results across platforms
 
 ## Modules
 
