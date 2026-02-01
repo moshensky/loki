@@ -227,10 +227,10 @@ Based on decisions above:
 
 ### Global Flags
 
-| Flag              | Default     | Description                              |
-| ----------------- | ----------- | ---------------------------------------- |
-| `--port <PORT>`   | `4040`      | Port for service (used by all commands)  |
-| `--config <FILE>` | `snapvrt.toml` | Config file path                      |
+| Flag              | Default        | Description                             |
+| ----------------- | -------------- | --------------------------------------- |
+| `--port <PORT>`   | `4040`         | Port for service (used by all commands) |
+| `--config <FILE>` | `snapvrt.toml` | Config file path                        |
 
 **Note:** No `--daemon` flag in v1. Use shell backgrounding (`&`) or systemd/launchd for long-running services.
 
@@ -261,6 +261,106 @@ open_browser = true          # Auto-open browser for `snapvrt review`
 
 [service.containers]
 idle_timeout = 300           # Seconds before stopping idle containers (0 = never)
+```
+
+## Module Structure
+
+The `snapvrt` crate (main binary) is organized into these modules:
+
+```
+snapvrt/src/
+├── main.rs
+├── cli.rs       # CLI interface
+├── config.rs    # Configuration
+├── server.rs    # HTTP API
+├── engine.rs    # Core operations
+├── docker.rs    # Container management
+└── store.rs     # Snapshot storage
+```
+
+### Module Responsibilities
+
+| Module   | Responsibility                                                                                                         |
+| -------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `cli`    | Clap definitions, arg parsing, command dispatch. Calls `engine` directly (standalone) or delegates to running service. |
+| `config` | Load config file (TOML), env vars, CLI args. Merge with precedence: CLI > env > file > defaults.                       |
+| `server` | Axum HTTP handlers. Thin layer that validates requests and calls `engine`. WebSocket for live updates.                 |
+| `engine` | Core business logic. Both `cli` and `server` call into this. Operations: capture, compare, approve, test batch.        |
+| `docker` | Docker container lifecycle. Start/stop capture and diff containers. Health checks. Idle timeout management.            |
+| `store`  | Filesystem operations for `.snapvrt/`. Read/write reference, current, diff images. List pending diffs.                 |
+
+### Module Dependencies
+
+```
+                    ┌─────────┐
+                    │  main   │
+                    └────┬────┘
+                         │
+              ┌──────────┼──────────┐
+              ▼          ▼          ▼
+         ┌────────┐ ┌────────┐ ┌────────┐
+         │  cli   │ │ server │ │ config │
+         └────┬───┘ └────┬───┘ └────────┘
+              │          │          │
+              └────┬─────┘          │
+                   ▼                │
+              ┌────────┐            │
+              │ engine │◄───────────┘
+              └────┬───┘
+                   │
+         ┌─────────┼─────────┐
+         ▼                   ▼
+    ┌────────┐          ┌────────┐
+    │ docker │          │ store  │
+    └────────┘          └────────┘
+```
+
+- `cli` and `server` are **interfaces** - they parse input and call `engine`
+- `engine` is the **core** - contains all business logic
+- `docker` and `store` are **infrastructure** - engine uses these for side effects
+- `config` is loaded at startup, passed to modules that need it
+
+### Key Types (Draft)
+
+```rust
+// config.rs
+pub struct Config {
+    pub port: u16,
+    pub host: IpAddr,
+    pub snapshot_dir: PathBuf,
+    pub storybook_url: Option<Url>,
+    pub containers: ContainerConfig,
+}
+
+// engine.rs
+pub struct Engine {
+    config: Arc<Config>,
+    docker: Docker,
+    store: Store,
+}
+
+impl Engine {
+    pub async fn compare_web(&self, req: CompareWebRequest) -> Result<CompareResult>;
+    pub async fn compare_pdf(&self, req: ComparePdfRequest) -> Result<CompareResult>;
+    pub async fn test_storybook(&self) -> Result<TestResult>;
+    pub async fn update_storybook(&self) -> Result<UpdateResult>;
+    pub async fn approve(&self, name: &str) -> Result<()>;
+    pub async fn approve_all(&self) -> Result<()>;
+    pub async fn status(&self) -> Result<Status>;
+}
+
+// store.rs
+pub struct Store {
+    root: PathBuf,  // .snapvrt/
+}
+
+impl Store {
+    pub fn reference_path(&self, name: &str) -> PathBuf;
+    pub fn current_path(&self, name: &str) -> PathBuf;
+    pub fn diff_path(&self, name: &str) -> PathBuf;
+    pub fn list_pending(&self) -> Result<Vec<PendingDiff>>;
+    pub fn approve(&self, name: &str) -> Result<()>;
+}
 ```
 
 ## Implementation Notes
