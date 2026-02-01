@@ -1189,13 +1189,13 @@ When local Chrome backend is added, detection order:
 
 ### Repository
 
-| Platform         | Location                      |
-| ---------------- | ----------------------------- |
-| **GitHub org**   | `sparkmill`                   |
-| **Repository**   | `sparkmill/snapvrt`           |
-| **GitHub Pages** | `sparkmill.github.io/snapvrt` |
+| Platform         | Location            |
+| ---------------- | ------------------- |
+| **GitHub org**   | `snapvrt`           |
+| **Repository**   | `snapvrt/snapvrt`   |
+| **GitHub Pages** | `snapvrt.github.io` |
 
-Sparkmill serves as a portfolio org for OSS projects.
+Product-focused org for clean branding. Personal credit via contributions visible on your GitHub profile.
 
 ### Packages
 
@@ -1205,24 +1205,23 @@ Sparkmill serves as a portfolio org for OSS projects.
 | **Docker Hub** | `snapvrt`  | `snapvrt/snap`, `snapvrt/diff-dssim`               |
 | **crates.io**  | `snapvrt`  | `snapvrt`, `snapvrt-snap`                          |
 
-npm scope is product-focused (`@snapvrt`), separate from GitHub org (`sparkmill`).
+All namespaces unified under `snapvrt`.
 
-### Domains (Future)
+### Domain (Future)
 
-| Domain          | Purpose                   | Priority                    |
-| --------------- | ------------------------- | --------------------------- |
-| `sparkmill.dev` | Portfolio/company landing | Optional                    |
-| `snapvrt.dev`   | Product landing & docs    | When project gains traction |
+| Domain        | Purpose              | Priority                    |
+| ------------- | -------------------- | --------------------------- |
+| `snapvrt.dev` | Product landing/docs | When project gains traction |
 
-Start with GitHub Pages. Add custom domains when/if needed.
+Start with GitHub Pages. Add custom domain when/if needed.
 
 ### Hosting Strategy
 
-| Phase           | Hosting                      | URL                           |
-| --------------- | ---------------------------- | ----------------------------- |
-| **Initial**     | GitHub Pages                 | `sparkmill.github.io/snapvrt` |
-| **With domain** | GitHub Pages + custom domain | `snapvrt.dev`                 |
-| **Growth**      | Vercel/Netlify (if needed)   | `snapvrt.dev`                 |
+| Phase           | Hosting                      | URL                 |
+| --------------- | ---------------------------- | ------------------- |
+| **Initial**     | GitHub Pages                 | `snapvrt.github.io` |
+| **With domain** | GitHub Pages + custom domain | `snapvrt.dev`       |
+| **Growth**      | Vercel/Netlify (if needed)   | `snapvrt.dev`       |
 
 ## Out of Scope (Initial Release)
 
