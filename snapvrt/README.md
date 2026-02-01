@@ -25,6 +25,18 @@ snapvrt is an opinionated visual regression testing tool that:
 4. **Zero configuration** - Sensible defaults, minimal setup
 5. **Fast** - Parallel workers, native tools
 
+## Background
+
+snapvrt is inspired by [loki](https://loki.js.org), a visual regression testing tool for Storybook. snapvrt takes a different approach:
+
+- **Multi-source** - Storybook, PDFs, and more (not just Storybook)
+- **Storybook 10+ only** - No legacy API support, cleaner integration
+- **Rust CLI + Docker** - No Node.js runtime required
+- **Interactive review UI** - Browser-based diff viewer out of the box
+- **Service mode** - HTTP API for Jest/Vitest integration
+
+If you need support for Storybook 5-8, use loki.
+
 ## Documentation
 
 ### For Users
